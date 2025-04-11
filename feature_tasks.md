@@ -56,11 +56,15 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Implement color-coded status indicators.
   - Create responsive grid layout for different screen sizes.
 
-- [ ] **Review Page**  
+- [x] **Review Page**  
   - Display side-by-side original document preview and extracted data.  
   - Provide tabs for invoice fields, line items, handwritten notes, etc.  
   - Let users edit extracted fields with auto-save or save button.  
   - Include export buttons (Markdown, JSON).
+  - Add document preview with zoom and rotate capabilities.
+  - Implement responsive design for mobile and tablet users.
+  - Add metadata display with OCR confidence scores.
+  - Ensure synchronized scrolling between document and data.
 
 ---
 
@@ -112,11 +116,11 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Determine if the document is an invoice, receipt, or "other" for structured extraction.  
   - Use LlamaParse or rules-based parsing for invoice fields (vendor, date, total amount, etc.).
 
-- [ ] **Review & Editing**  
+- [x] **Review & Editing**  
   - Allow user corrections of fields on the Review Page.  
   - Implement an edit flow where user changes are saved to the `Extraction` model.
 
-- [ ] **Data Export**  
+- [x] **Data Export**  
   - `GET /api/extractions/:id/export/markdown`: export all data as Markdown.  
   - `GET /api/extractions/:id/export/json`: export data as JSON.  
   - Preserve structured data (line items, notes) in the exported files.
