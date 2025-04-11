@@ -47,7 +47,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Documents() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("all"); // "all", "7days", "30days", "90days"
   const [currentPage, setCurrentPage] = useState(1);
@@ -112,7 +112,7 @@ export default function Documents() {
       }
       
       // Apply type filter
-      if (typeFilter) {
+      if (typeFilter && typeFilter !== "all") {
         const fileName = doc.originalFilename.toLowerCase();
         if (typeFilter === "invoice" && !fileName.includes("invoice")) return false;
         if (typeFilter === "receipt" && !fileName.includes("receipt")) return false;
@@ -291,7 +291,7 @@ export default function Documents() {
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Types</SelectItem>
+              <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="invoice">Invoices</SelectItem>
               <SelectItem value="receipt">Receipts</SelectItem>
               <SelectItem value="note">Notes</SelectItem>
@@ -354,7 +354,7 @@ export default function Documents() {
       </div>
 
       {/* Active filters display */}
-      {(searchQuery || typeFilter || statusFilter || dateFilter !== "all") && (
+      {(searchQuery || (typeFilter && typeFilter !== "all") || statusFilter || dateFilter !== "all") && (
         <div className="mb-4 flex flex-wrap gap-2 items-center">
           <span className="text-sm text-gray-500">Active filters:</span>
           
@@ -370,12 +370,12 @@ export default function Documents() {
             </Badge>
           )}
           
-          {typeFilter && (
+          {typeFilter && typeFilter !== "all" && (
             <Badge variant="secondary" className="flex items-center gap-1">
               Type: {typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
               <button 
                 className="ml-1 hover:text-gray-700" 
-                onClick={() => setTypeFilter("")}
+                onClick={() => setTypeFilter("all")}
               >
                 &times;
               </button>
@@ -411,7 +411,7 @@ export default function Documents() {
             size="sm" 
             onClick={() => {
               setSearchQuery("");
-              setTypeFilter("");
+              setTypeFilter("all");
               setStatusFilter("");
               setDateFilter("all");
               resetPage();
