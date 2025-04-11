@@ -43,7 +43,7 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Validate file type (PDF, JPEG, PNG, TIFF) and size (<10MB).  
   - Display progress bar for file uploads.
 
-- [ ] **Processing Page**  
+- [x] **Processing Page**  
   - Show document processing status with a progress indicator.  
   - Poll or use websockets to update status in real time.  
   - Allow cancellation of in-progress processing.
