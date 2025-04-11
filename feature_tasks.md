@@ -48,10 +48,13 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Poll or use websockets to update status in real time.  
   - Allow cancellation of in-progress processing.
 
-- [ ] **Documents List Page**  
+- [x] **Documents List Page**  
   - List all uploaded documents with sorting and filtering (by name, date, status).  
   - Provide pagination for large lists.  
   - Include a quick link or icon to go to each document's review/detail view.
+  - Add date range filtering options.
+  - Implement color-coded status indicators.
+  - Create responsive grid layout for different screen sizes.
 
 - [ ] **Review Page**  
   - Display side-by-side original document preview and extracted data.  

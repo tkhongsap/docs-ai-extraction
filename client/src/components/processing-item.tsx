@@ -34,21 +34,23 @@ export default function ProcessingItem({
 
   const getStatusMessage = (status: string, progress: number) => {
     if (status === "uploaded") {
-      return "In queue - Awaiting processing";
+      return "Queued — Waiting for OCR/handwriting tasks to start";
     } else if (status === "error") {
-      return document.errorMessage || "Failed to process document";
+      return document.errorMessage || "Failed to process document — Please retry or contact support";
     } else if (status === "completed") {
-      return "Processing complete";
-    } else if (progress < 20) {
-      return "Document analysis and preparation";
-    } else if (progress < 40) {
-      return "Text extraction and recognition";
-    } else if (progress < 70) {
-      return "Structure identification and data extraction";
-    } else if (progress < 90) {
-      return "Processing invoice data and handwritten notes";
+      return "Processing complete — Ready to review";
+    } else if (progress < 15) {
+      return "Document analysis and preparation — Initializing OCR";
+    } else if (progress < 35) {
+      return "Text extraction — Processing document content";
+    } else if (progress < 55) {
+      return "Handwriting recognition — Analyzing handwritten notes";
+    } else if (progress < 75) {
+      return "Structure identification — Parsing invoice data";
+    } else if (progress < 95) {
+      return "Data extraction — Organizing information";
     } else {
-      return "Final verification and data preparation";
+      return "Final verification — Preparing data for review";
     }
   };
 
@@ -118,6 +120,23 @@ export default function ProcessingItem({
     }
   };
 
+  // Helper function to get a more descriptive status label
+  const getStatusLabel = (status: string, progress: number) => {
+    if (status === "processing" && progress >= 95) {
+      return "Finalizing";
+    } else if (status === "processing") {
+      return "Processing";
+    } else if (status === "uploaded") {
+      return "Queued";
+    } else if (status === "error") {
+      return "Error";
+    } else if (status === "completed") {
+      return "Completed";
+    } else {
+      return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+  };
+
   return (
     <div className="rounded-lg border bg-background p-4 shadow-sm transition-all hover:shadow">
       <div className="flex items-start justify-between mb-2">
@@ -132,7 +151,7 @@ export default function ProcessingItem({
           </div>
         </div>
         <div className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusBadgeClass(document.status)}`}>
-          {document.status === "processing" && progress >= 95 ? "Finalizing" : document.status.charAt(0).toUpperCase() + document.status.slice(1)}
+          {getStatusLabel(document.status, progress)}
         </div>
       </div>
       

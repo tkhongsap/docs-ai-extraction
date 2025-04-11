@@ -27,6 +27,9 @@ export default function Processing() {
   // Refresh interval for polling (in milliseconds)
   const REFRESH_INTERVAL = 3000;
   
+  // Maximum processing time before showing warning (in milliseconds)
+  const MAX_PROCESSING_TIME = 5 * 60 * 1000; // 5 minutes
+  
   // Query for documents with automatic refresh
   const { data: documents, isLoading, error, refetch } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -126,6 +129,20 @@ export default function Processing() {
             // Simulate different processing speeds for different documents
             const increment = Math.floor(Math.random() * 3) + 2; // 2-4% increase per step
             updated[doc.id] = Math.min(updated[doc.id] + increment, 95);
+            
+            // Check for long-running processes
+            const processingTime = Date.now() - new Date(doc.uploadDate).getTime();
+            if (processingTime > MAX_PROCESSING_TIME && updated[doc.id] < 90) {
+              // Show warning for long-running processes
+              toast({
+                title: "Processing Taking Longer Than Expected",
+                description: `"${doc.originalFilename}" is taking longer than usual to process. This may be due to complexity or large file size.`,
+                variant: "destructive",
+              });
+              
+              // Skip to later stage to avoid appearing "stuck"
+              updated[doc.id] = Math.max(updated[doc.id], 90);
+            }
           }
         });
         
@@ -134,7 +151,7 @@ export default function Processing() {
     }, 1500);
     
     return () => clearInterval(interval);
-  }, [processingDocuments]);
+  }, [processingDocuments, toast]);
   
   // Check for newly completed documents and handle auto-navigation
   useEffect(() => {
@@ -180,7 +197,12 @@ export default function Processing() {
       ...prev,
       [documentId]: 0
     }));
-  }, [processDocumentMutation]);
+    
+    toast({
+      title: "Retrying Document",
+      description: "Processing will be attempted again. This may take some time.",
+    });
+  }, [processDocumentMutation, toast]);
   
   // Handle cancellation (delete document)
   const handleCancel = useCallback((documentId: number) => {
@@ -375,6 +397,28 @@ export default function Processing() {
               <span>Final verification and data preparation</span>
             </li>
           </ol>
+        </div>
+        
+        <div className="mt-4 bg-white rounded p-4 border border-blue-200">
+          <h4 className="font-bold text-sm mb-2">Status Explanation:</h4>
+          <ul className="text-sm text-gray-700 space-y-1">
+            <li className="flex items-center">
+              <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs mr-2 font-medium">Queued</span>
+              <span>Document is waiting for OCR processing to begin</span>
+            </li>
+            <li className="flex items-center">
+              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs mr-2 font-medium">Processing</span>
+              <span>OCR or handwriting recognition is currently in progress</span>
+            </li>
+            <li className="flex items-center">
+              <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs mr-2 font-medium">Completed</span>
+              <span>Processing finished successfully, ready for review</span>
+            </li>
+            <li className="flex items-center">
+              <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs mr-2 font-medium">Error</span>
+              <span>An issue occurred during processing - you can retry or contact support</span>
+            </li>
+          </ul>
         </div>
       </div>
     </section>
