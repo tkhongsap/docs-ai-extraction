@@ -188,7 +188,7 @@ async function processPdfWithMistralAI(filePath: string): Promise<any> {
         type: "document_url",
         documentUrl: dataUrl
       },
-      include_image_base64: false
+      includeImageBase64: false
     });
     
     console.log('PDF successfully processed by Mistral OCR');
@@ -252,7 +252,7 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
         type: "image_url",
         imageUrl: dataUrl
       },
-      include_image_base64: false
+      includeImageBase64: false
     });
     
     console.log('Image successfully processed by Mistral OCR');
