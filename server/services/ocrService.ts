@@ -10,6 +10,10 @@ import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
 import OpenAI from 'openai';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+// Import for PDF processing - removed pdf-poppler as it's not compatible with our environment
+import { v4 as uuidv4 } from 'uuid';
 
 // Import types for extraction data
 import { type Extraction, LineItem, HandwrittenNote } from '@shared/schema';
@@ -21,6 +25,15 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY
 });
+
+// Promisify exec for running shell commands
+const execPromise = promisify(exec);
+
+// Temporary directory for PDF-to-image conversion
+const tempDir = path.join(process.cwd(), "temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
 
 interface OCRResult {
   vendorName: string;
@@ -60,9 +73,33 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   let result: any;
   
   if (fileExtension === '.pdf') {
-    // For PDFs, use the direct Vision API with PDF content type
-    console.log('Processing PDF document using OpenAI Vision API...');
-    result = await processPDFWithOpenAI(filePath);
+    // Since we can't use pdf-poppler in this environment, we'll try direct methods
+    console.log('Processing PDF document directly...');
+    
+    // Read the PDF file as base64
+    const fileData = fs.readFileSync(filePath);
+    const base64File = fileData.toString('base64');
+    
+    // Try multiple approaches, starting with direct PDF processing
+    try {
+      console.log('Attempting to process PDF directly via OpenAI Vision API...');
+      result = await callOpenAIVisionAPI(base64File, 'application/pdf');
+    } catch (pdfError) {
+      console.error('Error processing PDF directly:', pdfError);
+      
+      // If direct PDF processing fails, try treating it as an image
+      // as sometimes the OpenAI API can still extract information
+      try {
+        console.log('Falling back to treating PDF as image/png...');
+        result = await callOpenAIVisionAPI(base64File, 'image/png');
+      } catch (imageError) {
+        console.error('Failed to process PDF as image/png:', imageError);
+        
+        // Last resort - try JPEG format
+        console.log('Trying as image/jpeg as last resort...');
+        result = await callOpenAIVisionAPI(base64File, 'image/jpeg');
+      }
+    }
   } else {
     // For images, use the direct Vision API approach
     console.log('Processing image document using OpenAI Vision API...');
@@ -98,7 +135,7 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
 }
 
 /**
- * Process a PDF document by converting it to images
+ * Process a PDF document by converting it to images first
  * 
  * @param filePath The path to the PDF file
  * @returns The raw OCR extraction data
@@ -107,15 +144,47 @@ async function processPDFWithOpenAI(filePath: string): Promise<any> {
   try {
     console.log(`Processing PDF at path: ${filePath}`);
     
-    // For PDFs, we need to read the file and send it as a base64 encoded string
-    const fileData = fs.readFileSync(filePath);
-    const base64File = fileData.toString('base64');
+    // Create a unique directory for this PDF's images
+    const uniqueId = uuidv4();
+    const outputDir = path.join(tempDir, uniqueId);
+    fs.mkdirSync(outputDir, { recursive: true });
+    
+    // Convert PDF to images
+    console.log('Converting PDF to images...');
+    
+    try {
+      // Try using ImageMagick to convert PDF to images
+      console.log('Attempting to convert PDF using ImageMagick...');
+      await execPromise(`convert -density 300 "${filePath}" "${path.join(outputDir, 'page-%d.png')}"`);
+    } catch (convError) {
+      console.error('Error with ImageMagick conversion:', convError);
+      
+      // No fallback available, throw error
+      throw new Error('Failed to convert PDF to images. Unable to process in this environment.');
+    }
+    
+    // Get all generated image files
+    const imageFiles = fs.readdirSync(outputDir)
+      .filter(file => file.endsWith('.png'))
+      .sort(); // Sort to ensure page order
+    
+    if (imageFiles.length === 0) {
+      throw new Error('PDF conversion produced no image files');
+    }
+    
+    console.log(`Converted PDF to ${imageFiles.length} image(s)`);
+    
+    // Process first page for basic document info
+    // Read first page as base64
+    const firstImagePath = path.join(outputDir, imageFiles[0]);
+    const firstImageData = fs.readFileSync(firstImagePath);
+    const firstImageBase64 = firstImageData.toString('base64');
     
     const prompt = `
       You are an expert document analyzer specializing in OCR extraction.
       
       TASK:
-      Extract all text from this PDF document, including both printed and handwritten content.
+      Extract all text from this document, including both printed and handwritten content.
       Identify the document type (invoice, receipt, or other).
       Pay special attention to document structure and layout.
       
@@ -145,7 +214,7 @@ async function processPDFWithOpenAI(filePath: string): Promise<any> {
          - Capture headers, footers, and page numbers
          - Note any logos or branding elements
          - Recognize stamps, signatures, or other approval marks
-         - Process every page of this PDF thoroughly and combine information logically
+         - This is page 1 of a ${imageFiles.length}-page document
       
       CONFIDENCE SCORING:
       - Provide an overall confidence score for the extraction
@@ -179,7 +248,7 @@ async function processPDFWithOpenAI(filePath: string): Promise<any> {
       }
     `;
     
-    // Use the same method as images but specify PDF content type
+    // Call Vision API with the first page image
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -196,7 +265,7 @@ async function processPDFWithOpenAI(filePath: string): Promise<any> {
               { 
                 type: "image_url", 
                 image_url: { 
-                  url: `data:application/pdf;base64,${base64File}`
+                  url: `data:image/png;base64,${firstImageBase64}`
                 } 
               }
             ]
@@ -218,12 +287,110 @@ async function processPDFWithOpenAI(filePath: string): Promise<any> {
     
     // Extract the JSON content from the response
     const content = responseData.choices[0].message.content;
+    let result;
+    
     try {
-      return JSON.parse(content);
+      result = JSON.parse(content);
     } catch (parseError: any) {
       console.error("Error parsing JSON response:", content);
       throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
     }
+    
+    // Process additional pages if needed (for complex documents)
+    if (imageFiles.length > 1) {
+      // Here you could add logic to process additional pages and merge results
+      console.log(`Document has ${imageFiles.length} pages, additional page processing logic could be added here`);
+      
+      // Example: detect if we have line items to process from additional pages
+      // This is simplified - in a real app you might want more sophisticated merging
+      for (let i = 1; i < Math.min(imageFiles.length, 3); i++) { // Process up to 3 pages maximum for demo
+        try {
+          const additionalImagePath = path.join(outputDir, imageFiles[i]);
+          const additionalImageData = fs.readFileSync(additionalImagePath);
+          const additionalImageBase64 = additionalImageData.toString('base64');
+          
+          const additionalPrompt = `
+            This is page ${i+1} of a ${imageFiles.length}-page document.
+            Look for additional information that might not be on the first page:
+            - Continue extracting line items
+            - Look for totals or summary information
+            - Find any additional handwritten notes
+            - Extract any terms and conditions
+            
+            Return ONLY new information found on this page in the same JSON format.
+          `;
+          
+          const additionalResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [
+                {
+                  role: "user", 
+                  content: [
+                    { type: "text", text: additionalPrompt },
+                    { 
+                      type: "image_url", 
+                      image_url: { 
+                        url: `data:image/png;base64,${additionalImageBase64}`
+                      } 
+                    }
+                  ]
+                }
+              ],
+              max_tokens: 1000,
+              temperature: 0.3,
+              response_format: { type: "json_object" }
+            })
+          });
+          
+          if (additionalResponse.ok) {
+            const additionalData = await additionalResponse.json() as { choices: [{ message: { content: string } }] };
+            const additionalContent = additionalData.choices[0].message.content;
+            
+            try {
+              const additionalResult = JSON.parse(additionalContent);
+              
+              // Merge additional line items if found
+              if (additionalResult.lineItems && additionalResult.lineItems.length > 0) {
+                result.lineItems = [...(result.lineItems || []), ...additionalResult.lineItems];
+              }
+              
+              // Merge additional handwritten notes if found
+              if (additionalResult.handwrittenNotes && additionalResult.handwrittenNotes.length > 0) {
+                result.handwrittenNotes = [...(result.handwrittenNotes || []), ...additionalResult.handwrittenNotes];
+              }
+              
+              // Update totals if found on subsequent pages
+              if (additionalResult.totalAmount && !result.totalAmount) {
+                result.totalAmount = additionalResult.totalAmount;
+              }
+              
+              if (additionalResult.taxAmount && !result.taxAmount) {
+                result.taxAmount = additionalResult.taxAmount;
+              }
+            } catch (e) {
+              console.warn(`Could not parse additional page ${i+1} results:`, e);
+            }
+          }
+        } catch (pageError) {
+          console.warn(`Error processing additional page ${i+1}:`, pageError);
+        }
+      }
+    }
+    
+    // Cleanup temporary files
+    try {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      console.warn('Failed to clean up temporary files:', cleanupError);
+    }
+    
+    return result;
   } catch (error: any) {
     console.error("Error processing PDF with OpenAI:", error);
     throw new Error(`Failed to process PDF with OpenAI: ${error.message}`);
