@@ -40,13 +40,15 @@ const upload = multer({
       "application/pdf", 
       "image/jpeg", 
       "image/png", 
-      "image/tiff"
+      "image/tiff", 
+      "image/gif",
+      "image/webp"
     ];
     
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type. Only PDF, JPEG, PNG, and TIFF are allowed."));
+      cb(new Error("Invalid file type. Only PDF, JPEG, PNG, TIFF, GIF, and WEBP are allowed."));
     }
   },
 });

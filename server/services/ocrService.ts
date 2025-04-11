@@ -382,11 +382,11 @@ export function generateMarkdownOutput(result: OCRResult): string {
   }
   
   // Amounts
-  if (result.totalAmount !== undefined) {
+  if (typeof result.totalAmount === 'number') {
     markdown += `**Total Amount:** $${result.totalAmount.toFixed(2)}\n`;
   }
   
-  if (result.taxAmount !== undefined) {
+  if (typeof result.taxAmount === 'number') {
     markdown += `**Tax Amount:** $${result.taxAmount.toFixed(2)}\n`;
   }
   
