@@ -35,47 +35,10 @@ interface OCRResult {
   confidence: number;
 }
 
-/**
- * Upload a file to OpenAI's Files API for processing
- * 
- * @param filePath Path to the file to upload
- * @returns The file ID from OpenAI Files API
- */
-async function uploadFileToOpenAI(filePath: string): Promise<string> {
-  try {
-    console.log(`Uploading file ${filePath} to OpenAI Files API...`);
-    
-    const file = await openai.files.create({
-      file: fs.createReadStream(filePath),
-      purpose: 'vision', // Using vision purpose for OCR capabilities
-    });
-    
-    console.log(`File uploaded successfully with ID: ${file.id}`);
-    return file.id;
-  } catch (error: any) {
-    console.error('Error uploading file to OpenAI:', error);
-    throw new Error(`Failed to upload file to OpenAI: ${error.message}`);
-  }
-}
+// OpenAI API integration is now handled directly through the Vision API
 
 /**
- * Delete a file from OpenAI's Files API after processing
- * 
- * @param fileId The ID of the file to delete
- */
-async function deleteFileFromOpenAI(fileId: string): Promise<void> {
-  try {
-    console.log(`Deleting file ${fileId} from OpenAI Files API...`);
-    await openai.files.del(fileId);
-    console.log(`File ${fileId} deleted successfully`);
-  } catch (error: any) {
-    console.error(`Error deleting file ${fileId} from OpenAI:`, error);
-    // We'll just log the error but not throw, as this is a cleanup operation
-  }
-}
-
-/**
- * Process a document using the OpenAI Files API for PDFs or Vision API for images
+ * Process a document using the OpenAI Vision API
  * 
  * @param filePath Path to the document file to process
  * @returns Structured extraction data from the document
@@ -97,19 +60,9 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   let result: any;
   
   if (fileExtension === '.pdf') {
-    // For PDFs, use the Files API for better multi-page handling
-    console.log('Processing PDF document using OpenAI Files API...');
-    
-    // Upload the file to OpenAI
-    const fileId = await uploadFileToOpenAI(filePath);
-    
-    try {
-      // Process the file using the chat completions API with file references
-      result = await processPDFWithOpenAI(fileId);
-    } finally {
-      // Always try to clean up the file after processing
-      await deleteFileFromOpenAI(fileId);
-    }
+    // For PDFs, use the direct Vision API with PDF content type
+    console.log('Processing PDF document using OpenAI Vision API...');
+    result = await processPDFWithOpenAI(filePath);
   } else {
     // For images, use the direct Vision API approach
     console.log('Processing image document using OpenAI Vision API...');
@@ -145,14 +98,18 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
 }
 
 /**
- * Process a PDF document using OpenAI's Files API
+ * Process a PDF document by converting it to images
  * 
- * @param fileId The ID of the file uploaded to OpenAI
+ * @param filePath The path to the PDF file
  * @returns The raw OCR extraction data
  */
-async function processPDFWithOpenAI(fileId: string): Promise<any> {
+async function processPDFWithOpenAI(filePath: string): Promise<any> {
   try {
-    console.log(`Processing PDF with file ID: ${fileId}`);
+    console.log(`Processing PDF at path: ${filePath}`);
+    
+    // For PDFs, we need to read the file and send it as a base64 encoded string
+    const fileData = fs.readFileSync(filePath);
+    const base64File = fileData.toString('base64');
     
     const prompt = `
       You are an expert document analyzer specializing in OCR extraction.
@@ -222,33 +179,45 @@ async function processPDFWithOpenAI(fileId: string): Promise<any> {
       }
     `;
     
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "file_path",
-              file_path: {
-                file_id: fileId
+    // Use the same method as images but specify PDF content type
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",  // Using the model specified by the user
+        messages: [
+          {
+            role: "user", 
+            content: [
+              { type: "text", text: prompt },
+              { 
+                type: "image_url", 
+                image_url: { 
+                  url: `data:application/pdf;base64,${base64File}`
+                } 
               }
-            }
-          ]
-        }
-      ],
-      max_tokens: 1500,
-      temperature: 0.3,
-      response_format: { type: "json_object" }
+            ]
+          }
+        ],
+        max_tokens: 1500,  // Appropriate token limit for this model
+        temperature: 0.3,  // Lower temperature for more consistent results
+        response_format: { type: "json_object" }
+      })
     });
     
-    // Extract and parse the JSON content from the response
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error('No content returned from OpenAI');
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API Error Response:", errorText);
+      throw new Error(`OpenAI API Error: ${response.status} ${errorText}`);
     }
     
+    const responseData = await response.json() as { choices: [{ message: { content: string } }] };
+    
+    // Extract the JSON content from the response
+    const content = responseData.choices[0].message.content;
     try {
       return JSON.parse(content);
     } catch (parseError: any) {
