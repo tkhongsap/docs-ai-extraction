@@ -2,28 +2,26 @@
  * OCR Service
  * 
  * This service handles OCR processing for document extraction.
- * It connects to OpenAI Vision API to extract text and structured data from documents.
- * For PDFs, it uses OpenAI's Files API for better handling of multi-page documents.
+ * It connects to Mistral AI OCR service to extract text and structured data from documents.
+ * It supports both PDF and image files for OCR processing.
  */
 
 import fs from 'fs';
 import path from 'path';
-import fetch from 'node-fetch';
-import OpenAI from 'openai';
+import { Mistral } from '@mistralai/mistralai';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-// Import for PDF processing - removed pdf-poppler as it's not compatible with our environment
 import { v4 as uuidv4 } from 'uuid';
 
 // Import types for extraction data
 import { type Extraction, LineItem, HandwrittenNote } from '@shared/schema';
 
-// Environment variable for OpenAI API key
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Environment variable for Mistral API key
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY
+// Initialize Mistral client
+const mistralClient = new Mistral({
+  apiKey: MISTRAL_API_KEY
 });
 
 // Promisify exec for running shell commands
@@ -101,7 +99,7 @@ function extractBasicInfoFromFilename(filePath: string): {
 }
 
 /**
- * Process a document using the OpenAI Vision API
+ * Process a document using the Mistral AI OCR service
  * 
  * @param filePath Path to the document file to process
  * @returns Structured extraction data from the document
@@ -112,8 +110,8 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
     throw new Error(`File not found: ${filePath}`);
   }
 
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not set in environment variables');
+  if (!MISTRAL_API_KEY) {
+    throw new Error('MISTRAL_API_KEY is not set in environment variables');
   }
 
   // Get file extension to determine appropriate processing method
@@ -122,15 +120,23 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   // Process differently based on file type
   let result: any;
   
-  if (fileExtension === '.pdf') {
-    // OpenAI Vision API doesn't support PDFs directly
-    console.log('Processing PDF document...');
+  // Mistral OCR supports both PDF and image files
+  console.log(`Processing document with file extension: ${fileExtension}`);
+  
+  try {
+    if (fileExtension === '.pdf') {
+      console.log('Processing PDF document using Mistral OCR...');
+      // For PDFs, we need to upload the file first to Mistral's service
+      result = await processPdfWithMistralAI(filePath);
+    } else {
+      // For images, use the direct OCR processing
+      console.log('Processing image document using Mistral OCR...');
+      result = await processImageWithMistralAI(filePath);
+    }
+  } catch (error: any) {
+    console.error('Error processing document with Mistral AI:', error);
     
-    // The OCR service cannot process PDFs directly in this environment
-    // Generate a structured response with basic metadata
-    console.log('Cannot process PDF file directly through OpenAI Vision API');
-    
-    // Extract basic document information from filename
+    // If Mistral processing fails, fall back to basic info extraction from filename
     const basicInfo = extractBasicInfoFromFilename(filePath);
     
     // Create a result with document metadata
@@ -144,48 +150,13 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
       taxAmount: null,
       lineItems: [],
       handwrittenNotes: [{
-        text: "PDF processing is not available. Please upload JPEG, PNG, GIF, or WEBP formats.",
+        text: `Failed to process document: ${error.message}`,
         confidence: 1.0
       }],
       confidence: 0.1
     };
     
-    // Log the limitation
-    console.log('Returning basic document information for PDF file');
-  } else {
-    // For images, use the direct Vision API approach
-    console.log('Processing image document using OpenAI Vision API...');
-    
-    // Read file as base64
-    const fileData = fs.readFileSync(filePath);
-    const base64File = fileData.toString('base64');
-    
-    // Determine content type based on file extension
-    let contentType: string;
-    switch (fileExtension) {
-      case '.jpg':
-      case '.jpeg':
-        contentType = 'image/jpeg';
-        break;
-      case '.png':
-        contentType = 'image/png';
-        break;
-      case '.tiff':
-      case '.tif':
-        contentType = 'image/tiff';
-        break;
-      case '.gif':
-        contentType = 'image/gif';
-        break;
-      case '.webp':
-        contentType = 'image/webp';
-        break;
-      default:
-        throw new Error(`Unsupported file extension: ${fileExtension}`);
-    }
-    
-    // Call OpenAI Vision API
-    result = await callOpenAIVisionAPI(base64File, contentType);
+    console.log('Returning basic document information due to processing error');
   }
   
   // Format and validate the result
@@ -193,128 +164,208 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
 }
 
 /**
- * Call the OpenAI Vision API to process an image
+ * Process PDF document using Mistral AI OCR service
  * 
- * @param base64File The document file encoded as base64
- * @param contentType The MIME type of the document
- * @returns The raw response from the OpenAI API
+ * @param filePath Path to the PDF file
+ * @returns Structured extraction data
  */
-async function callOpenAIVisionAPI(base64File: string, contentType: string): Promise<any> {
-  const prompt = `
-    You are an expert document analyzer specializing in OCR extraction.
-    
-    TASK:
-    Extract all text from this document, including both printed and handwritten content.
-    Identify the document type (invoice, receipt, or other).
-    Pay special attention to document structure and layout.
-    
-    EXTRACTION INSTRUCTIONS:
-    1. For invoices and receipts:
-       - Vendor name and complete contact information
-       - Invoice/receipt number (look for patterns like INV-####, #######, etc.)
-       - Invoice date (convert to YYYY-MM-DD format)
-       - Due date if present (convert to YYYY-MM-DD format)
-       - Total amount (numeric value only)
-       - Tax amount if present (numeric value only)
-       - Line items with detailed description, quantity, unit price, and amount
-       - Look for any special terms, payment instructions, or notes
-    
-    2. For handwritten notes:
-       - Extract all handwritten text
-       - Identify the context of the note (e.g., approval, comment, instruction)
-       - Provide a confidence score between 0 and 1 for each note
-       - If a note is partially illegible, extract what you can and mark uncertain parts
-    
-    3. For tables and structured data:
-       - Preserve the structure of tables
-       - For each line item, ensure all fields are correctly associated
-       - Handle multi-line descriptions by keeping them with the correct item
-    
-    4. For general content:
-       - Capture headers, footers, and page numbers
-       - Note any logos or branding elements
-       - Recognize stamps, signatures, or other approval marks
-    
-    CONFIDENCE SCORING:
-    - Provide an overall confidence score for the extraction
-    - For handwritten content, provide individual confidence scores
-    - For unclear or ambiguous text, provide lower confidence scores
-    
-    Format your response as a JSON object with the following structure:
-    {
-      "documentType": "invoice|receipt|other",
-      "vendorName": "...",
-      "invoiceNumber": "...",
-      "invoiceDate": "YYYY-MM-DD",
-      "dueDate": "YYYY-MM-DD",
-      "totalAmount": 123.45,
-      "taxAmount": 10.00,
-      "lineItems": [
-        {
-          "description": "...",
-          "quantity": 1,
-          "unitPrice": 100.00,
-          "amount": 100.00
-        }
-      ],
-      "handwrittenNotes": [
-        {
-          "text": "...",
-          "confidence": 0.85
-        }
-      ],
-      "confidence": 0.95
-    }
-  `;
-
+async function processPdfWithMistralAI(filePath: string): Promise<any> {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",  // Using the model specified by the user
-        messages: [
-          {
-            role: "user", 
-            content: [
-              { type: "text", text: prompt },
-              { 
-                type: "image_url", 
-                image_url: { 
-                  url: `data:${contentType};base64,${base64File}`
-                } 
-              }
-            ]
-          }
-        ],
-        max_tokens: 1500,  // Appropriate token limit for this model
-        temperature: 0.3,  // Lower temperature for more consistent results
-        response_format: { type: "json_object" }
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI API Error Response:", errorText);
-      throw new Error(`OpenAI API Error: ${response.status} ${errorText}`);
-    }
-
-    const responseData = await response.json() as { choices: [{ message: { content: string } }] };
+    console.log('Uploading PDF file to Mistral AI...');
     
-    // Extract the JSON content from the response
-    const content = responseData.choices[0].message.content;
+    const fileContent = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+    
+    // Upload the file to Mistral
+    const uploadedFile = await mistralClient.files.upload({
+      file: {
+        fileName: fileName,
+        content: fileContent,
+      },
+      purpose: "ocr"
+    });
+    
+    console.log(`File uploaded to Mistral AI with ID: ${uploadedFile.id}`);
+    
+    // Process the uploaded file with Mistral OCR
+    const ocrResponse = await mistralClient.ocr.process({
+      model: "mistral-ocr-latest",
+      document: {
+        type: "file_id",
+        fileId: uploadedFile.id,
+      }
+    });
+    
+    // Extract the structured information from the OCR response
+    return parseMistralOCRResponse(ocrResponse);
+  } catch (error: any) {
+    console.error('Error processing PDF with Mistral AI:', error);
+    throw new Error(`Failed to process PDF with Mistral AI: ${error.message}`);
+  }
+}
+
+/**
+ * Process image document using Mistral AI OCR service
+ * 
+ * @param filePath Path to the image file
+ * @returns Structured extraction data
+ */
+async function processImageWithMistralAI(filePath: string): Promise<any> {
+  try {
+    console.log('Processing image with Mistral AI OCR...');
+    
+    // Create a temporary unique URL-like name for the file reference
+    const fileName = path.basename(filePath);
+    
+    // Upload the image file to Mistral for OCR processing
+    const fileContent = fs.readFileSync(filePath);
+    
+    // Upload the file to Mistral
+    const uploadedFile = await mistralClient.files.upload({
+      file: {
+        fileName: fileName,
+        content: fileContent,
+      },
+      purpose: "ocr"
+    });
+    
+    console.log(`File uploaded to Mistral AI with ID: ${uploadedFile.id}`);
+    
+    // Process the uploaded file with Mistral OCR
+    const ocrResponse = await mistralClient.ocr.process({
+      model: "mistral-ocr-latest",
+      document: {
+        type: "file_id",
+        fileId: uploadedFile.id,
+      }
+    });
+    
+    // Extract the structured information from the OCR response
+    return parseMistralOCRResponse(ocrResponse);
+  } catch (error: any) {
+    console.error('Error processing image with Mistral AI:', error);
+    throw new Error(`Failed to process image with Mistral AI: ${error.message}`);
+  }
+}
+
+/**
+ * Parse the Mistral OCR response into our structured format
+ * 
+ * @param ocrResponse The raw OCR response from Mistral AI
+ * @returns Structured data in our application format
+ */
+function parseMistralOCRResponse(ocrResponse: any): any {
+  console.log('Parsing Mistral OCR response...');
+  
+  try {
+    // Extract text from Mistral OCR response
+    const extractedText = ocrResponse.text || '';
+    
+    // Ask Mistral to process the text into our structured format using its chat API
+    return processExtractedTextWithMistralAI(extractedText, ocrResponse);
+  } catch (error: any) {
+    console.error('Error parsing Mistral OCR response:', error);
+    throw new Error(`Failed to parse Mistral OCR response: ${error.message}`);
+  }
+}
+
+/**
+ * Process the OCR-extracted text with Mistral AI to get structured data
+ * 
+ * @param extractedText The text extracted by OCR
+ * @param ocrResponse The full OCR response for additional context
+ * @returns Structured document data
+ */
+async function processExtractedTextWithMistralAI(extractedText: string, ocrResponse: any): Promise<any> {
+  try {
+    console.log('Processing extracted text with Mistral AI chat...');
+    
+    // Create a prompt for Mistral to analyze the document text
+    const prompt = `
+You are an expert document analyzer specializing in OCR extraction.
+
+Here's the OCR text from a document:
+"""
+${extractedText}
+"""
+
+TASK:
+Analyze this document text and extract the key information.
+Identify the document type (invoice, receipt, or other).
+Pay special attention to document structure and layout.
+
+EXTRACTION INSTRUCTIONS:
+1. For invoices and receipts:
+   - Vendor name and complete contact information
+   - Invoice/receipt number (look for patterns like INV-####, #######, etc.)
+   - Invoice date (convert to YYYY-MM-DD format)
+   - Due date if present (convert to YYYY-MM-DD format)
+   - Total amount (numeric value only)
+   - Tax amount if present (numeric value only)
+   - Line items with detailed description, quantity, unit price, and amount
+   - Look for any special terms, payment instructions, or notes
+
+2. For handwritten notes:
+   - Extract all handwritten text
+   - Identify the context of the note (e.g., approval, comment, instruction)
+   - Provide a confidence score between 0 and 1 for each note
+   - If a note is partially illegible, extract what you can and mark uncertain parts
+
+CONFIDENCE SCORING:
+- Provide an overall confidence score for the extraction
+- For handwritten content, provide individual confidence scores
+- For unclear or ambiguous text, provide lower confidence scores
+
+Format your response as a JSON object with the following structure:
+{
+  "documentType": "invoice|receipt|other",
+  "vendorName": "...",
+  "invoiceNumber": "...",
+  "invoiceDate": "YYYY-MM-DD",
+  "dueDate": "YYYY-MM-DD",
+  "totalAmount": 123.45,
+  "taxAmount": 10.00,
+  "lineItems": [
+    {
+      "description": "...",
+      "quantity": 1,
+      "unitPrice": 100.00,
+      "amount": 100.00
+    }
+  ],
+  "handwrittenNotes": [
+    {
+      "text": "...",
+      "confidence": 0.85
+    }
+  ],
+  "confidence": 0.95
+}
+`;
+
+    // Use Mistral AI chat to analyze the extracted text
+    const chatResponse = await mistralClient.chat({
+      model: "mistral-large-latest",
+      messages: [
+        { role: "user", content: prompt }
+      ],
+      responseFormat: { type: "json_object" }
+    });
+    
+    // Parse the response content
+    const content = chatResponse.choices[0].message.content;
+    
+    // Try to parse the JSON response
     try {
-      return JSON.parse(content);
+      const structuredData = JSON.parse(content);
+      return structuredData;
     } catch (parseError: any) {
-      console.error("Error parsing JSON response:", content);
-      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+      console.error("Error parsing JSON from Mistral chat response:", content);
+      throw new Error(`Failed to parse Mistral chat response as JSON: ${parseError.message}`);
     }
   } catch (error: any) {
-    console.error("Error calling OpenAI API:", error);
-    throw new Error(`Failed to process document with OpenAI: ${error.message}`);
+    console.error('Error processing text with Mistral AI chat:', error);
+    throw new Error(`Failed to process text with Mistral AI chat: ${error.message}`);
   }
 }
 
