@@ -70,8 +70,8 @@ A running list of tasks to guide development of the OCR Document Extraction App.
 
 ## 3. Backend: Document Management & API
 
-- [ ] **MongoDB Integration**  
-  - Connect to MongoDB (Atlas or local).  
+- [ ] **PostgreSQL Integration**  
+  - Connect to PostgreSQL (Atlas or local).  
   - Create `Document` model (id, filename, status, uploadDate, storagePath, etc.).  
   - Create `Extraction` model (id, documentId, invoice details, line items, handwritten notes, etc.).
 

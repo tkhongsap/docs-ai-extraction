@@ -8,7 +8,7 @@ import { insertDocumentSchema, insertExtractionSchema, LineItem, HandwrittenNote
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 // Import the OCR service
-// import * as ocrService from "./services/ocrService";
+import * as ocrService from "./services/ocrService";
 
 // Setup upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -190,84 +190,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
-          // TODO: Implement actual OCR processing here using the ocrService
-          // When implemented, uncomment and use code like:
-          /*
           // Process the document with OCR
           const ocrResult = await ocrService.processDocument(document.storagePath);
+          
+          // Generate markdown and JSON outputs
+          const markdownOutput = ocrService.generateMarkdownOutput(ocrResult);
+          const jsonOutput = ocrService.generateJSONOutput(ocrResult);
+          
+          // Create extraction record
+          const extraction = await storage.createExtraction({
+            documentId: id,
+            vendorName: ocrResult.vendorName,
+            invoiceNumber: ocrResult.invoiceNumber,
+            invoiceDate: ocrResult.invoiceDate ? new Date(ocrResult.invoiceDate) : undefined,
+            dueDate: ocrResult.dueDate ? new Date(ocrResult.dueDate) : undefined,
+            totalAmount: ocrResult.totalAmount?.toString(),
+            taxAmount: ocrResult.taxAmount?.toString(),
+            lineItems: JSON.parse(JSON.stringify(ocrResult.lineItems)),
+            handwrittenNotes: JSON.parse(JSON.stringify(ocrResult.handwrittenNotes)),
+            markdownOutput,
+            jsonOutput
+          });
           
           // Update document to completed state
           await storage.updateDocument(id, {
             status: "completed",
           });
           
-          // Create extraction with actual OCR data
-          await storage.createExtraction({
-            documentId: id,
-            vendorName: ocrResult.vendorName,
-            invoiceNumber: ocrResult.invoiceNumber,
-            invoiceDate: ocrResult.invoiceDate,
-            dueDate: ocrResult.dueDate,
-            totalAmount: ocrResult.totalAmount,
-            taxAmount: ocrResult.taxAmount,
-            lineItems: ocrResult.lineItems,
-            handwrittenNotes: ocrResult.handwrittenNotes,
-          });
-          */
+          console.log(`Document ${id} processed successfully`);
+        } catch (error: any) {
+          console.error(`Error processing document ${id}:`, error);
           
-          // For now, we'll just update the status to indicate processing is complete
-          // and generate some mock data for testing the review page
-          await storage.updateDocument(id, {
-            status: "completed"
-          });
-          
-          // Add mock extraction data for testing
-          const mockLineItems: LineItem[] = [
-            {
-              description: "Product ABC",
-              quantity: 2,
-              unitPrice: 10.99,
-              amount: 21.98
-            },
-            {
-              description: "Service XYZ",
-              quantity: 1,
-              unitPrice: 50.00,
-              amount: 50.00
-            }
-          ];
-          
-          const mockHandwrittenNotes: HandwrittenNote[] = [
-            {
-              text: "Please process ASAP",
-              confidence: 85
-            }
-          ];
-          
-          // Create mock extraction data
-          await storage.createExtraction({
-            documentId: id,
-            vendorName: "ABC Company",
-            invoiceNumber: "INV-12345",
-            invoiceDate: new Date(),
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-            totalAmount: "71.98",
-            taxAmount: "5.00",
-            lineItems: mockLineItems,
-            handwrittenNotes: mockHandwrittenNotes
-          });
-        } catch (error) {
-          console.error("Error in OCR processing:", error);
+          // Update document to error state
           await storage.updateDocument(id, {
             status: "error",
-            errorMessage: "OCR processing failed: " + (error instanceof Error ? error.message : "Unknown error")
+            errorMessage: error.message || "Unknown error during processing"
           });
         }
-      }, 1000);
+      }, 100); // Small delay to not block response
       
       res.json(updatedDocument);
     } catch (error) {
-      console.error("Error processing document:", error);
+      console.error("Error starting document processing:", error);
       res.status(500).json({ message: "Failed to process document" });
     }
   });
@@ -323,143 +287,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update extraction data
-  app.put("/api/extractions/:id", async (req: Request, res: Response) => {
+  app.patch("/api/extractions/:id", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
-      // Get extraction to update
       const extraction = await storage.getExtraction(id);
+      
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
       
       // Validate update data
-      const updateData = insertExtractionSchema.partial().parse(req.body);
+      const updateData = req.body;
       
       // Update extraction
       const updatedExtraction = await storage.updateExtraction(id, updateData);
       
+      if (!updatedExtraction) {
+        return res.status(500).json({ message: "Failed to update extraction" });
+      }
+      
       res.json(updatedExtraction);
     } catch (error) {
       console.error("Error updating extraction:", error);
-      
-      if (error instanceof z.ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      
       res.status(500).json({ message: "Failed to update extraction data" });
     }
   });
 
-  // Export as Markdown
+  // Export extraction data as Markdown
   app.get("/api/extractions/:id/export/markdown", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
-      // Get extraction data
       const extraction = await storage.getExtraction(id);
+      
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
       
-      // Format as Markdown
+      // If we already have a markdown output stored, use that
+      if (extraction.markdownOutput) {
+        res.setHeader('Content-Type', 'text/markdown');
+        res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.md"`);
+        return res.send(extraction.markdownOutput);
+      }
+      
+      // Otherwise, fetch the document and generate a markdown output
+      const document = await storage.getDocument(extraction.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Associated document not found" });
+      }
+      
+      res.setHeader('Content-Type', 'text/markdown');
+      res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.md"`);
+      
+      // Create a basic markdown if we don't have stored markdown
       let markdown = `# Document Extraction\n\n`;
-      
-      if (extraction.vendorName) {
-        markdown += `## Vendor\n${extraction.vendorName}\n\n`;
-      }
-      
-      if (extraction.invoiceNumber) {
-        markdown += `## Invoice Number\n${extraction.invoiceNumber}\n\n`;
-      }
+      markdown += `## Document Info\n\n`;
+      markdown += `- **Vendor**: ${extraction.vendorName || 'Unknown'}\n`;
+      markdown += `- **Invoice Number**: ${extraction.invoiceNumber || 'Unknown'}\n`;
       
       if (extraction.invoiceDate) {
-        markdown += `## Invoice Date\n${new Date(extraction.invoiceDate).toLocaleDateString()}\n\n`;
+        markdown += `- **Invoice Date**: ${extraction.invoiceDate.toISOString().split('T')[0]}\n`;
       }
       
       if (extraction.dueDate) {
-        markdown += `## Due Date\n${new Date(extraction.dueDate).toLocaleDateString()}\n\n`;
+        markdown += `- **Due Date**: ${extraction.dueDate.toISOString().split('T')[0]}\n`;
       }
       
       if (extraction.totalAmount) {
-        markdown += `## Total Amount\n${extraction.totalAmount}\n\n`;
+        markdown += `- **Total Amount**: $${extraction.totalAmount}\n`;
       }
       
       if (extraction.taxAmount) {
-        markdown += `## Tax Amount\n${extraction.taxAmount}\n\n`;
+        markdown += `- **Tax Amount**: $${extraction.taxAmount}\n`;
       }
       
       if (extraction.lineItems && extraction.lineItems.length > 0) {
-        markdown += `## Line Items\n\n`;
+        markdown += `\n## Line Items\n\n`;
         markdown += `| Description | Quantity | Unit Price | Amount |\n`;
         markdown += `| ----------- | -------- | ---------- | ------ |\n`;
         
-        extraction.lineItems.forEach(item => {
-          markdown += `| ${item.description} | ${item.quantity} | ${item.unitPrice} | ${item.amount} |\n`;
-        });
-        
-        markdown += `\n`;
+        for (const item of extraction.lineItems) {
+          markdown += `| ${item.description} | ${item.quantity} | $${item.unitPrice.toFixed(2)} | $${item.amount.toFixed(2)} |\n`;
+        }
       }
       
       if (extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0) {
-        markdown += `## Handwritten Notes\n\n`;
+        markdown += `\n## Handwritten Notes\n\n`;
         
-        extraction.handwrittenNotes.forEach(note => {
-          markdown += `- ${note.text} (confidence: ${note.confidence}%)\n`;
-        });
+        for (const note of extraction.handwrittenNotes) {
+          markdown += `- ${note.text} _(confidence: ${note.confidence}%)_\n`;
+        }
       }
       
-      // Update the extraction with the markdown output
+      // Update extraction with generated markdown
       await storage.updateExtraction(id, { markdownOutput: markdown });
       
-      // Send response
-      res.setHeader('Content-Type', 'text/markdown');
-      res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.md"`);
       res.send(markdown);
     } catch (error) {
-      console.error("Error exporting as Markdown:", error);
-      res.status(500).json({ message: "Failed to export as Markdown" });
+      console.error("Error exporting markdown:", error);
+      res.status(500).json({ message: "Failed to export markdown" });
     }
   });
 
-  // Export as JSON
+  // Export extraction data as JSON
   app.get("/api/extractions/:id/export/json", async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      
-      // Get extraction data
       const extraction = await storage.getExtraction(id);
+      
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
       
-      // Format for export - remove internal id fields
-      const exportData = {
-        vendorName: extraction.vendorName,
-        invoiceNumber: extraction.invoiceNumber,
-        invoiceDate: extraction.invoiceDate,
-        dueDate: extraction.dueDate,
-        totalAmount: extraction.totalAmount,
-        taxAmount: extraction.taxAmount,
-        lineItems: extraction.lineItems as LineItem[],
-        handwrittenNotes: extraction.handwrittenNotes as HandwrittenNote[]
-      };
+      // If we already have a JSON output stored, use that
+      if (extraction.jsonOutput) {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.json"`);
+        return res.send(extraction.jsonOutput);
+      }
       
-      const jsonOutput = JSON.stringify(exportData, null, 2);
+      // Otherwise, generate a JSON output
+      const document = await storage.getDocument(extraction.documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Associated document not found" });
+      }
       
-      // Update the extraction with the json output
-      await storage.updateExtraction(id, { 
-        jsonOutput
-      });
+      const jsonOutput = JSON.stringify({
+        documentInfo: {
+          vendor: extraction.vendorName,
+          invoiceNumber: extraction.invoiceNumber,
+          invoiceDate: extraction.invoiceDate,
+          dueDate: extraction.dueDate,
+          totalAmount: extraction.totalAmount,
+          taxAmount: extraction.taxAmount
+        },
+        lineItems: extraction.lineItems,
+        handwrittenNotes: extraction.handwrittenNotes,
+        metadata: {
+          documentId: extraction.documentId,
+          extractionId: extraction.id,
+          processedDate: document.uploadDate
+        }
+      }, null, 2);
       
-      // Send response
+      // Update extraction with generated JSON
+      await storage.updateExtraction(id, { jsonOutput });
+      
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.json"`);
       res.send(jsonOutput);
     } catch (error) {
-      console.error("Error exporting as JSON:", error);
-      res.status(500).json({ message: "Failed to export as JSON" });
+      console.error("Error exporting JSON:", error);
+      res.status(500).json({ message: "Failed to export JSON" });
+    }
+  });
+
+  // Get extraction data for a document
+  app.get("/api/documents/:id/extraction", async (req: Request, res: Response) => {
+    try {
+      const documentId = parseInt(req.params.id);
+      
+      // Get document to verify it exists
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Find extraction for this document
+      const extraction = await storage.getExtractionByDocumentId(documentId);
+      
+      if (!extraction) {
+        return res.status(404).json({ message: "Extraction not found for this document" });
+      }
+      
+      res.json(extraction);
+    } catch (error) {
+      console.error("Error getting extraction:", error);
+      res.status(500).json({ message: "Failed to retrieve extraction data" });
     }
   });
 
