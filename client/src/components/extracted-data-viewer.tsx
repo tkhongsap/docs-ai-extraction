@@ -658,7 +658,7 @@ export default function ExtractedDataViewer({
                 <div>
                   <p className="text-sm text-gray-500">OCR Engine</p>
                   <div className="flex items-center">
-                    <span className="text-sm font-medium mr-2">OpenAI Vision API</span>
+                    <span className="text-sm font-medium mr-2">Mistral AI OCR</span>
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                       Active
                     </Badge>

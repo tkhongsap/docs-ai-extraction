@@ -46,8 +46,6 @@ interface OCRResult {
   confidence: number;
 }
 
-// OpenAI API integration is now handled directly through the Vision API
-
 /**
  * Extract basic document information from filename
  * 

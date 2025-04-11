@@ -376,7 +376,7 @@ export default function Processing() {
       {/* Processing Information */}
       <div className="bg-blue-50 rounded-lg p-5">
         <h3 className="font-bold text-primary mb-3">About Processing</h3>
-        <p className="text-gray-700 mb-3">Your documents are being processed using advanced OCR technology powered by OpenAI Vision and LlamaParse. The processing time depends on document complexity and size.</p>
+        <p className="text-gray-700 mb-3">Your documents are being processed using advanced OCR technology powered by Mistral AI OCR. The processing time depends on document complexity and size.</p>
         <div className="bg-white rounded p-4 border border-blue-200">
           <h4 className="font-bold text-sm mb-2">Processing Steps:</h4>
           <ol className="text-sm text-gray-700 space-y-1">
