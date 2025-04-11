@@ -171,26 +171,24 @@ async function processPdfWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing PDF file with Mistral AI...');
     
-    // For PDFs, we directly use the OCR API with the local file path
-    // Convert the file to base64
+    // We need to upload the PDF to a cloud storage or create a temporary link
+    // For simplicity, let's create a temporary data URL
     const fileContent = fs.readFileSync(filePath);
     const base64File = fileContent.toString('base64');
-    
-    // Process the PDF using Mistral OCR with document_url
-    // We need to create a data URL from the base64 content
     const contentType = 'application/pdf';
     const dataUrl = `data:${contentType};base64,${base64File}`;
     
     console.log('Calling Mistral OCR API with PDF data...');
     
-    // Process the uploaded file with Mistral OCR
+    // Process the PDF with Mistral OCR
+    // Using document_url with a data URL
     const ocrResponse = await mistralClient.ocr.process({
       model: "mistral-ocr-latest",
       document: {
-        type: "image_url", // Using image_url type with data URL
-        imageUrl: dataUrl
+        type: "document_url",
+        documentUrl: dataUrl
       },
-      includeImageBase64: false
+      include_image_base64: false
     });
     
     console.log('PDF successfully processed by Mistral OCR');
@@ -254,7 +252,7 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
         type: "image_url",
         imageUrl: dataUrl
       },
-      includeImageBase64: false
+      include_image_base64: false
     });
     
     console.log('Image successfully processed by Mistral OCR');
@@ -372,11 +370,11 @@ Format your response as a JSON object with the following structure:
     });
     
     // Parse the response content
-    const content = chatResponse.choices[0].message.content;
+    const content = chatResponse.choices?.[0]?.message?.content || '';
     
     // Try to parse the JSON response
     try {
-      const structuredData = JSON.parse(content);
+      const structuredData = JSON.parse(content as string);
       return structuredData;
     } catch (parseError: any) {
       console.error("Error parsing JSON from Mistral chat response:", content);
