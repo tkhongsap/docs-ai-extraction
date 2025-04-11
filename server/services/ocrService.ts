@@ -162,7 +162,7 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
         'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4-vision-preview",  // Using the vision-optimized model for better OCR
+        model: "gpt-4o-mini",  // Using the model specified by the user
         messages: [
           {
             role: "user", 
@@ -171,14 +171,13 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
               { 
                 type: "image_url", 
                 image_url: { 
-                  url: `data:${contentType};base64,${base64File}`,
-                  detail: "high"  // Request high detail for better text recognition
+                  url: `data:${contentType};base64,${base64File}`
                 } 
               }
             ]
           }
         ],
-        max_tokens: 3000,  // Increased token limit for more detailed response
+        max_tokens: 1500,  // Appropriate token limit for this model
         temperature: 0.3,  // Lower temperature for more consistent results
         response_format: { type: "json_object" }
       })
