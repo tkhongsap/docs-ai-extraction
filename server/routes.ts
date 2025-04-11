@@ -44,7 +44,7 @@ const upload = multer({
       "image/gif",
       "image/webp"
     ];
-    
+
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -72,11 +72,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const document = await storage.getDocument(id);
-      
+
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       res.json(document);
     } catch (error) {
       console.error("Error getting document:", error);
@@ -89,16 +89,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const document = await storage.getDocument(id);
-      
+
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       // Check if file exists
       if (!fs.existsSync(document.storagePath)) {
         return res.status(404).json({ message: "Document file not found" });
       }
-      
+
       // Send file
       res.sendFile(document.storagePath);
     } catch (error) {
@@ -106,32 +106,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to retrieve document file" });
     }
   });
-  
+
   // Get next document for review
   app.get("/api/documents/next/:currentId", async (req: Request, res: Response) => {
     try {
       const currentId = parseInt(req.params.currentId);
-      
+
       // Get all documents
       const documents = await storage.getDocuments();
-      
+
       // Find the next document that has a complete status
       const eligibleDocuments = documents.filter(doc => 
         doc.id !== currentId && 
         doc.status === 'completed'
       );
-      
+
       // Sort by upload date, newest first
       eligibleDocuments.sort((a, b) => 
         new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
       );
-      
+
       const nextDocument = eligibleDocuments[0];
-      
+
       if (!nextDocument) {
         return res.status(404).json({ message: "No more documents to review" });
       }
-      
+
       res.json(nextDocument);
     } catch (error) {
       console.error("Error getting next document:", error);
@@ -145,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
-      
+
       const documentData = {
         originalFilename: req.file.originalname,
         fileSize: req.file.size,
@@ -153,22 +153,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "uploaded",
         storagePath: req.file.path,
       };
-      
+
       // Validate document data
       const validatedData = insertDocumentSchema.parse(documentData);
-      
+
       // Create the document
       const document = await storage.createDocument(validatedData);
-      
+
       res.status(201).json(document);
     } catch (error) {
       console.error("Error uploading document:", error);
-      
+
       if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
-      
+
       res.status(500).json({ message: "Failed to upload document" });
     }
   });
@@ -178,27 +178,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const document = await storage.getDocument(id);
-      
+
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       // Update document status to processing
       const updatedDocument = await storage.updateDocument(id, {
         status: "processing",
       });
-      
+
       // In a production app, this should trigger an async job through a queue
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
           // Process the document with OCR
           const ocrResult = await ocrService.processDocument(document.storagePath);
-          
+
           // Generate markdown and JSON outputs
           const markdownOutput = ocrService.generateMarkdownOutput(ocrResult);
           const jsonOutput = ocrService.generateJSONOutput(ocrResult);
-          
+
           // Create extraction record
           const extraction = await storage.createExtraction({
             documentId: id,
@@ -213,16 +213,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             markdownOutput,
             jsonOutput
           });
-          
+
           // Update document to completed state
           await storage.updateDocument(id, {
             status: "completed",
           });
-          
+
           console.log(`Document ${id} processed successfully`);
         } catch (error: any) {
           console.error(`Error processing document ${id}:`, error);
-          
+
           // Update document to error state
           await storage.updateDocument(id, {
             status: "error",
@@ -230,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }, 100); // Small delay to not block response
-      
+
       res.json(updatedDocument);
     } catch (error) {
       console.error("Error starting document processing:", error);
@@ -243,19 +243,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const document = await storage.getDocument(id);
-      
+
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       // Delete the file from storage
       if (fs.existsSync(document.storagePath)) {
         fs.unlinkSync(document.storagePath);
       }
-      
+
       // Delete from storage
       await storage.deleteDocument(id);
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting document:", error);
@@ -267,20 +267,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/extractions/document/:documentId", async (req: Request, res: Response) => {
     try {
       const documentId = parseInt(req.params.documentId);
-      
+
       // Check if document exists
       const document = await storage.getDocument(documentId);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       // Get extraction data
       const extraction = await storage.getExtractionByDocumentId(documentId);
-      
+
       if (!extraction) {
         return res.status(404).json({ message: "No extraction data found for this document" });
       }
-      
+
       res.json(extraction);
     } catch (error) {
       console.error("Error getting extraction:", error);
@@ -293,21 +293,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const extraction = await storage.getExtraction(id);
-      
+
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
-      
+
       // Validate update data
       const updateData = req.body;
-      
+
       // Update extraction
       const updatedExtraction = await storage.updateExtraction(id, updateData);
-      
+
       if (!updatedExtraction) {
         return res.status(500).json({ message: "Failed to update extraction" });
       }
-      
+
       res.json(updatedExtraction);
     } catch (error) {
       console.error("Error updating extraction:", error);
@@ -320,70 +320,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const extraction = await storage.getExtraction(id);
-      
+
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
-      
+
       // If we already have a markdown output stored, use that
       if (extraction.markdownOutput) {
         res.setHeader('Content-Type', 'text/markdown');
         res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.md"`);
         return res.send(extraction.markdownOutput);
       }
-      
+
       // Otherwise, fetch the document and generate a markdown output
       const document = await storage.getDocument(extraction.documentId);
       if (!document) {
         return res.status(404).json({ message: "Associated document not found" });
       }
-      
+
       res.setHeader('Content-Type', 'text/markdown');
       res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.md"`);
-      
+
       // Create a basic markdown if we don't have stored markdown
       let markdown = `# Document Extraction\n\n`;
       markdown += `## Document Info\n\n`;
       markdown += `- **Vendor**: ${extraction.vendorName || 'Unknown'}\n`;
       markdown += `- **Invoice Number**: ${extraction.invoiceNumber || 'Unknown'}\n`;
-      
+
       if (extraction.invoiceDate) {
         markdown += `- **Invoice Date**: ${extraction.invoiceDate.toISOString().split('T')[0]}\n`;
       }
-      
+
       if (extraction.dueDate) {
         markdown += `- **Due Date**: ${extraction.dueDate.toISOString().split('T')[0]}\n`;
       }
-      
+
       if (extraction.totalAmount) {
         markdown += `- **Total Amount**: $${extraction.totalAmount}\n`;
       }
-      
+
       if (extraction.taxAmount) {
         markdown += `- **Tax Amount**: $${extraction.taxAmount}\n`;
       }
-      
+
       if (extraction.lineItems && extraction.lineItems.length > 0) {
         markdown += `\n## Line Items\n\n`;
         markdown += `| Description | Quantity | Unit Price | Amount |\n`;
         markdown += `| ----------- | -------- | ---------- | ------ |\n`;
-        
+
         for (const item of extraction.lineItems) {
           markdown += `| ${item.description} | ${item.quantity} | $${item.unitPrice.toFixed(2)} | $${item.amount.toFixed(2)} |\n`;
         }
       }
-      
+
       if (extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0) {
         markdown += `\n## Handwritten Notes\n\n`;
-        
+
         for (const note of extraction.handwrittenNotes) {
           markdown += `- ${note.text} _(confidence: ${note.confidence}%)_\n`;
         }
       }
-      
+
       // Update extraction with generated markdown
       await storage.updateExtraction(id, { markdownOutput: markdown });
-      
+
       res.send(markdown);
     } catch (error) {
       console.error("Error exporting markdown:", error);
@@ -396,24 +396,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const extraction = await storage.getExtraction(id);
-      
+
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found" });
       }
-      
+
       // If we already have a JSON output stored, use that
       if (extraction.jsonOutput) {
-        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.json"`);
         return res.send(extraction.jsonOutput);
       }
-      
+
       // Otherwise, generate a JSON output
       const document = await storage.getDocument(extraction.documentId);
       if (!document) {
         return res.status(404).json({ message: "Associated document not found" });
       }
-      
+
       const jsonOutput = JSON.stringify({
         documentInfo: {
           vendor: extraction.vendorName,
@@ -431,11 +431,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           processedDate: document.uploadDate
         }
       }, null, 2);
-      
+
       // Update extraction with generated JSON
       await storage.updateExtraction(id, { jsonOutput });
-      
-      res.setHeader('Content-Type', 'application/json');
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="extraction-${id}.json"`);
       res.send(jsonOutput);
     } catch (error) {
@@ -448,20 +448,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/documents/:id/extraction", async (req: Request, res: Response) => {
     try {
       const documentId = parseInt(req.params.id);
-      
+
       // Get document to verify it exists
       const document = await storage.getDocument(documentId);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
+
       // Find extraction for this document
       const extraction = await storage.getExtractionByDocumentId(documentId);
-      
+
       if (!extraction) {
         return res.status(404).json({ message: "Extraction not found for this document" });
       }
-      
+
       res.json(extraction);
     } catch (error) {
       console.error("Error getting extraction:", error);

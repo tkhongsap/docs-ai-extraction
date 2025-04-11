@@ -58,22 +58,22 @@ function extractBasicInfoFromFilename(filePath: string): {
   date?: string; 
 } {
   const filename = path.basename(filePath);
-  
+
   // Extract possible document info from the filename
   // This is a fallback for when we can't process the PDF content
-  
+
   // Try to extract a vendor name (anything before the first number or special character)
   const vendorMatch = filename.match(/^([A-Za-z\s]+)/);
   const vendorName = vendorMatch ? vendorMatch[1].trim() : undefined;
-  
+
   // Try to find a document ID (sequences of digits, possibly with prefix)
   const idMatch = filename.match(/([A-Za-z]{1,5}-?[0-9]{3,})/);
   const documentId = idMatch ? idMatch[1] : undefined;
-  
+
   // Try to find a date in the filename (very basic pattern)
   const dateMatch = filename.match(/(\d{4}[-_]\d{1,2}[-_]\d{1,2})|(\d{1,2}[-_]\d{1,2}[-_]\d{4})/);
   let date: string | undefined = undefined;
-  
+
   if (dateMatch) {
     const dateStr = dateMatch[0];
     try {
@@ -92,7 +92,7 @@ function extractBasicInfoFromFilename(filePath: string): {
       console.warn('Could not parse date from filename:', dateStr);
     }
   }
-  
+
   return { vendorName, documentId, date };
 }
 
@@ -114,13 +114,13 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
 
   // Get file extension to determine appropriate processing method
   const fileExtension = path.extname(filePath).toLowerCase();
-  
+
   // Process differently based on file type
   let result: any;
-  
+
   // Mistral OCR supports both PDF and image files
   console.log(`Processing document with file extension: ${fileExtension}`);
-  
+
   try {
     if (fileExtension === '.pdf') {
       console.log('Processing PDF document using Mistral OCR...');
@@ -133,10 +133,10 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
     }
   } catch (error: any) {
     console.error('Error processing document with Mistral AI:', error);
-    
+
     // If Mistral processing fails, fall back to basic info extraction from filename
     const basicInfo = extractBasicInfoFromFilename(filePath);
-    
+
     // Create a result with document metadata
     result = {
       documentType: 'other',
@@ -153,10 +153,10 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
       }],
       confidence: 0.1
     };
-    
+
     console.log('Returning basic document information due to processing error');
   }
-  
+
   // Format and validate the result
   return formatOCRResult(result);
 }
@@ -170,16 +170,16 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
 async function processPdfWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing PDF file with Mistral AI...');
-    
+
     // We need to upload the PDF to a cloud storage or create a temporary link
     // For simplicity, let's create a temporary data URL
-    const fileContent = fs.readFileSync(filePath);
+    const fileContent = fs.readFileSync(filePath, {encoding: 'utf8'});
     const base64File = fileContent.toString('base64');
     const contentType = 'application/pdf';
     const dataUrl = `data:${contentType};base64,${base64File}`;
-    
+
     console.log('Calling Mistral OCR API with PDF data...');
-    
+
     // Process the PDF with Mistral OCR
     // Using document_url with a data URL
     const ocrResponse = await mistralClient.ocr.process({
@@ -190,9 +190,9 @@ async function processPdfWithMistralAI(filePath: string): Promise<any> {
       },
       includeImageBase64: false
     });
-    
+
     console.log('PDF successfully processed by Mistral OCR');
-    
+
     // Extract the structured information from the OCR response
     return parseMistralOCRResponse(ocrResponse);
   } catch (error: any) {
@@ -210,11 +210,11 @@ async function processPdfWithMistralAI(filePath: string): Promise<any> {
 async function processImageWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing image with Mistral AI OCR...');
-    
+
     // Read the image file
-    const fileContent = fs.readFileSync(filePath);
+    const fileContent = fs.readFileSync(filePath, {encoding: 'utf8'});
     const base64File = fileContent.toString('base64');
-    
+
     // Determine content type based on file extension
     const fileExtension = path.extname(filePath).toLowerCase();
     let contentType: string;
@@ -239,12 +239,12 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
       default:
         contentType = 'image/jpeg'; // Default content type
     }
-    
+
     // Create a data URL for the image
     const dataUrl = `data:${contentType};base64,${base64File}`;
-    
+
     console.log('Calling Mistral OCR API with image data...');
-    
+
     // Process with Mistral OCR
     const ocrResponse = await mistralClient.ocr.process({
       model: "mistral-ocr-latest",
@@ -254,9 +254,9 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
       },
       includeImageBase64: false
     });
-    
+
     console.log('Image successfully processed by Mistral OCR');
-    
+
     // Extract the structured information from the OCR response
     return parseMistralOCRResponse(ocrResponse);
   } catch (error: any) {
@@ -273,11 +273,11 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
  */
 function parseMistralOCRResponse(ocrResponse: any): any {
   console.log('Parsing Mistral OCR response...');
-  
+
   try {
     // Extract text from Mistral OCR response
     const extractedText = ocrResponse.text || '';
-    
+
     // Ask Mistral to process the text into our structured format using its chat API
     return processExtractedTextWithMistralAI(extractedText, ocrResponse);
   } catch (error: any) {
@@ -296,7 +296,7 @@ function parseMistralOCRResponse(ocrResponse: any): any {
 async function processExtractedTextWithMistralAI(extractedText: string, ocrResponse: any): Promise<any> {
   try {
     console.log('Processing extracted text with Mistral AI chat...');
-    
+
     // Create a prompt for Mistral to analyze the document text
     const prompt = `
 You are an expert document analyzer specializing in OCR extraction.
@@ -368,10 +368,10 @@ Format your response as a JSON object with the following structure:
       ],
       responseFormat: { type: "json_object" }
     });
-    
+
     // Parse the response content
     const content = chatResponse.choices?.[0]?.message?.content || '';
-    
+
     // Try to parse the JSON response
     try {
       const structuredData = JSON.parse(content as string);
@@ -434,54 +434,54 @@ export function formatOCRResult(rawResult: any): OCRResult {
  */
 export function generateMarkdownOutput(result: OCRResult): string {
   let markdown = `# Document Extraction Report\n\n`;
-  
+
   // Document type and basic info
   markdown += `**Document Type:** ${result.documentType}\n`;
   markdown += `**Vendor:** ${result.vendorName}\n`;
   markdown += `**Invoice Number:** ${result.invoiceNumber}\n`;
-  
+
   // Dates
   if (result.invoiceDate) {
     markdown += `**Invoice Date:** ${result.invoiceDate}\n`;
   }
-  
+
   if (result.dueDate) {
     markdown += `**Due Date:** ${result.dueDate}\n`;
   }
-  
+
   // Amounts
   if (typeof result.totalAmount === 'number') {
     markdown += `**Total Amount:** $${result.totalAmount.toFixed(2)}\n`;
   }
-  
+
   if (typeof result.taxAmount === 'number') {
     markdown += `**Tax Amount:** $${result.taxAmount.toFixed(2)}\n`;
   }
-  
+
   // Line Items
   if (result.lineItems && result.lineItems.length > 0) {
     markdown += `\n## Line Items\n\n`;
     markdown += `| Description | Quantity | Unit Price | Amount |\n`;
     markdown += `|------------|----------|------------|--------|\n`;
-    
+
     for (const item of result.lineItems) {
       markdown += `| ${item.description} | ${item.quantity} | $${item.unitPrice.toFixed(2)} | $${item.amount.toFixed(2)} |\n`;
     }
   }
-  
+
   // Handwritten Notes
   if (result.handwrittenNotes && result.handwrittenNotes.length > 0) {
     markdown += `\n## Handwritten Notes\n\n`;
-    
+
     for (const note of result.handwrittenNotes) {
       markdown += `- "${note.text}" (Confidence: ${Math.round(note.confidence * 100)}%)\n`;
     }
   }
-  
+
   // Extraction confidence
   markdown += `\n## Extraction Information\n\n`;
   markdown += `**Overall Confidence:** ${Math.round(result.confidence * 100)}%\n`;
-  
+
   return markdown;
 }
 
