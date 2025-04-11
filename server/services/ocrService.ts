@@ -3,17 +3,24 @@
  * 
  * This service handles OCR processing for document extraction.
  * It connects to OpenAI Vision API to extract text and structured data from documents.
+ * For PDFs, it uses OpenAI's Files API for better handling of multi-page documents.
  */
 
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
+import OpenAI from 'openai';
 
 // Import types for extraction data
 import { type Extraction, LineItem, HandwrittenNote } from '@shared/schema';
 
 // Environment variable for OpenAI API key
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY
+});
 
 interface OCRResult {
   vendorName: string;
@@ -29,7 +36,46 @@ interface OCRResult {
 }
 
 /**
- * Process a document using OCR services
+ * Upload a file to OpenAI's Files API for processing
+ * 
+ * @param filePath Path to the file to upload
+ * @returns The file ID from OpenAI Files API
+ */
+async function uploadFileToOpenAI(filePath: string): Promise<string> {
+  try {
+    console.log(`Uploading file ${filePath} to OpenAI Files API...`);
+    
+    const file = await openai.files.create({
+      file: fs.createReadStream(filePath),
+      purpose: 'vision', // Using vision purpose for OCR capabilities
+    });
+    
+    console.log(`File uploaded successfully with ID: ${file.id}`);
+    return file.id;
+  } catch (error: any) {
+    console.error('Error uploading file to OpenAI:', error);
+    throw new Error(`Failed to upload file to OpenAI: ${error.message}`);
+  }
+}
+
+/**
+ * Delete a file from OpenAI's Files API after processing
+ * 
+ * @param fileId The ID of the file to delete
+ */
+async function deleteFileFromOpenAI(fileId: string): Promise<void> {
+  try {
+    console.log(`Deleting file ${fileId} from OpenAI Files API...`);
+    await openai.files.del(fileId);
+    console.log(`File ${fileId} deleted successfully`);
+  } catch (error: any) {
+    console.error(`Error deleting file ${fileId} from OpenAI:`, error);
+    // We'll just log the error but not throw, as this is a cleanup operation
+  }
+}
+
+/**
+ * Process a document using the OpenAI Files API for PDFs or Vision API for images
  * 
  * @param filePath Path to the document file to process
  * @returns Structured extraction data from the document
@@ -47,36 +93,172 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   // Get file extension to determine appropriate processing method
   const fileExtension = path.extname(filePath).toLowerCase();
   
-  // Read file as base64
-  const fileData = fs.readFileSync(filePath);
-  const base64File = fileData.toString('base64');
+  // Process differently based on file type
+  let result: any;
   
-  // Determine content type based on file extension
-  let contentType: string;
-  switch (fileExtension) {
-    case '.pdf':
-      contentType = 'application/pdf';
-      break;
-    case '.jpg':
-    case '.jpeg':
-      contentType = 'image/jpeg';
-      break;
-    case '.png':
-      contentType = 'image/png';
-      break;
-    case '.tiff':
-    case '.tif':
-      contentType = 'image/tiff';
-      break;
-    default:
-      throw new Error(`Unsupported file extension: ${fileExtension}`);
+  if (fileExtension === '.pdf') {
+    // For PDFs, use the Files API for better multi-page handling
+    console.log('Processing PDF document using OpenAI Files API...');
+    
+    // Upload the file to OpenAI
+    const fileId = await uploadFileToOpenAI(filePath);
+    
+    try {
+      // Process the file using the chat completions API with file references
+      result = await processPDFWithOpenAI(fileId);
+    } finally {
+      // Always try to clean up the file after processing
+      await deleteFileFromOpenAI(fileId);
+    }
+  } else {
+    // For images, use the direct Vision API approach
+    console.log('Processing image document using OpenAI Vision API...');
+    
+    // Read file as base64
+    const fileData = fs.readFileSync(filePath);
+    const base64File = fileData.toString('base64');
+    
+    // Determine content type based on file extension
+    let contentType: string;
+    switch (fileExtension) {
+      case '.jpg':
+      case '.jpeg':
+        contentType = 'image/jpeg';
+        break;
+      case '.png':
+        contentType = 'image/png';
+        break;
+      case '.tiff':
+      case '.tif':
+        contentType = 'image/tiff';
+        break;
+      default:
+        throw new Error(`Unsupported file extension: ${fileExtension}`);
+    }
+    
+    // Call OpenAI Vision API
+    result = await callOpenAIVisionAPI(base64File, contentType);
   }
-
-  // Call OpenAI Vision API
-  const result = await callOpenAIVisionAPI(base64File, contentType);
   
   // Format and validate the result
   return formatOCRResult(result);
+}
+
+/**
+ * Process a PDF document using OpenAI's Files API
+ * 
+ * @param fileId The ID of the file uploaded to OpenAI
+ * @returns The raw OCR extraction data
+ */
+async function processPDFWithOpenAI(fileId: string): Promise<any> {
+  try {
+    console.log(`Processing PDF with file ID: ${fileId}`);
+    
+    const prompt = `
+      You are an expert document analyzer specializing in OCR extraction.
+      
+      TASK:
+      Extract all text from this PDF document, including both printed and handwritten content.
+      Identify the document type (invoice, receipt, or other).
+      Pay special attention to document structure and layout.
+      
+      EXTRACTION INSTRUCTIONS:
+      1. For invoices and receipts:
+         - Vendor name and complete contact information
+         - Invoice/receipt number (look for patterns like INV-####, #######, etc.)
+         - Invoice date (convert to YYYY-MM-DD format)
+         - Due date if present (convert to YYYY-MM-DD format)
+         - Total amount (numeric value only)
+         - Tax amount if present (numeric value only)
+         - Line items with detailed description, quantity, unit price, and amount
+         - Look for any special terms, payment instructions, or notes
+      
+      2. For handwritten notes:
+         - Extract all handwritten text
+         - Identify the context of the note (e.g., approval, comment, instruction)
+         - Provide a confidence score between 0 and 1 for each note
+         - If a note is partially illegible, extract what you can and mark uncertain parts
+      
+      3. For tables and structured data:
+         - Preserve the structure of tables
+         - For each line item, ensure all fields are correctly associated
+         - Handle multi-line descriptions by keeping them with the correct item
+      
+      4. For general content:
+         - Capture headers, footers, and page numbers
+         - Note any logos or branding elements
+         - Recognize stamps, signatures, or other approval marks
+         - Process every page of this PDF thoroughly and combine information logically
+      
+      CONFIDENCE SCORING:
+      - Provide an overall confidence score for the extraction
+      - For handwritten content, provide individual confidence scores
+      - For unclear or ambiguous text, provide lower confidence scores
+      
+      Format your response as a JSON object with the following structure:
+      {
+        "documentType": "invoice|receipt|other",
+        "vendorName": "...",
+        "invoiceNumber": "...",
+        "invoiceDate": "YYYY-MM-DD",
+        "dueDate": "YYYY-MM-DD",
+        "totalAmount": 123.45,
+        "taxAmount": 10.00,
+        "lineItems": [
+          {
+            "description": "...",
+            "quantity": 1,
+            "unitPrice": 100.00,
+            "amount": 100.00
+          }
+        ],
+        "handwrittenNotes": [
+          {
+            "text": "...",
+            "confidence": 0.85
+          }
+        ],
+        "confidence": 0.95
+      }
+    `;
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "file_path",
+              file_path: {
+                file_id: fileId
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+    
+    // Extract and parse the JSON content from the response
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error('No content returned from OpenAI');
+    }
+    
+    try {
+      return JSON.parse(content);
+    } catch (parseError: any) {
+      console.error("Error parsing JSON response:", content);
+      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+    }
+  } catch (error: any) {
+    console.error("Error processing PDF with OpenAI:", error);
+    throw new Error(`Failed to process PDF with OpenAI: ${error.message}`);
+  }
 }
 
 /**
