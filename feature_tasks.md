@@ -38,7 +38,7 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Create feature cards highlighting key capabilities.
   - Add a clear upload document CTA as specified in requirements.
 
-- [ ] **Upload Page**  
+- [x] **Upload Page**  
   - Implement drag-and-drop file upload area and fallback file input.  
   - Validate file type (PDF, JPEG, PNG, TIFF) and size (<10MB).  
   - Display progress bar for file uploads.

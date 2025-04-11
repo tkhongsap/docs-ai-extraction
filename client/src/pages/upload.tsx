@@ -1,19 +1,81 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { CheckCircle, UploadCloud as UploadIcon, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FileDropzone from "@/components/file-dropzone";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Upload() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files);
+    
+    // Reset progress and errors when files are selected
+    setUploadProgress({});
+    setUploadErrors({});
+  };
+
+  const trackUploadProgress = (file: File, progress: number) => {
+    setUploadProgress(prev => ({
+      ...prev,
+      [file.name]: progress
+    }));
+  };
+  
+  const setFileError = (file: File, error: string) => {
+    setUploadErrors(prev => ({
+      ...prev,
+      [file.name]: error
+    }));
+  };
+
+  const uploadFile = async (file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      // Track upload progress
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          trackUploadProgress(file, percentComplete);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          const errorMessage = `Upload failed: ${xhr.status} - ${xhr.statusText}`;
+          setFileError(file, errorMessage);
+          reject(new Error(errorMessage));
+        }
+      });
+
+      xhr.addEventListener("error", () => {
+        const errorMessage = "Network error occurred during upload";
+        setFileError(file, errorMessage);
+        reject(new Error(errorMessage));
+      });
+
+      xhr.addEventListener("timeout", () => {
+        const errorMessage = "Upload timed out";
+        setFileError(file, errorMessage);
+        reject(new Error(errorMessage));
+      });
+
+      xhr.open("POST", "/api/documents", true);
+      xhr.send(formData);
+    });
   };
 
   const handleUpload = async () => {
@@ -27,30 +89,11 @@ export default function Upload() {
     }
 
     setIsUploading(true);
+    setUploadProgress({});
+    setUploadErrors({});
 
     try {
-      const uploadPromises = selectedFiles.map(async (file) => {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        try {
-          const response = await fetch("/api/documents", {
-            method: "POST",
-            body: formData,
-            credentials: "include",
-          });
-
-          if (!response.ok) {
-            throw new Error(`Upload failed: ${response.status} - ${response.statusText}`);
-          }
-
-          return await response.json();
-        } catch (error) {
-          console.error(`Error uploading ${file.name}:`, error);
-          throw error;
-        }
-      });
-
+      const uploadPromises = selectedFiles.map(file => uploadFile(file));
       const results = await Promise.allSettled(uploadPromises);
       
       const successCount = results.filter(result => result.status === "fulfilled").length;
@@ -63,8 +106,10 @@ export default function Upload() {
           variant: "default",
         });
         
-        // Navigate to processing page
-        navigate("/processing");
+        // If all files were uploaded successfully, navigate to processing page
+        if (failCount === 0) {
+          navigate("/processing");
+        }
       } else {
         toast({
           title: "Upload failed",
@@ -97,9 +142,52 @@ export default function Upload() {
           e.preventDefault();
           handleUpload();
         }}>
-          <FileDropzone onFilesSelected={handleFilesSelected} />
+          <FileDropzone 
+            onFilesSelected={handleFilesSelected} 
+            uploadProgress={uploadProgress}
+            uploadErrors={uploadErrors}
+            isUploading={isUploading}
+          />
+          
+          {selectedFiles.length > 0 && (
+            <div className="mt-6 flex justify-end">
+              <Button 
+                type="submit"
+                disabled={isUploading || selectedFiles.length === 0}
+                className="flex items-center gap-2"
+              >
+                {isUploading ? 'Uploading...' : 'Upload & Process'}
+                {!isUploading && <UploadIcon className="h-4 w-4" />}
+              </Button>
+            </div>
+          )}
         </form>
       </div>
+
+      {/* File Requirements Summary */}
+      <Alert className="mb-8">
+        <AlertTitle className="text-primary font-medium">File Requirements</AlertTitle>
+        <AlertDescription>
+          <ul className="text-sm text-gray-700 mt-2 space-y-1">
+            <li className="flex items-start gap-2">
+              <CheckCircle className="text-primary h-4 w-4 mt-0.5" />
+              <span><strong>Supported formats:</strong> PDF, JPEG, PNG, TIFF</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle className="text-primary h-4 w-4 mt-0.5" />
+              <span><strong>Maximum file size:</strong> 10MB per file</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckCircle className="text-primary h-4 w-4 mt-0.5" />
+              <span><strong>Multiple files:</strong> Upload up to 10 files at once</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <AlertTriangle className="text-amber-500 h-4 w-4 mt-0.5" />
+              <span>For best OCR results, ensure documents are clearly scanned at 300 DPI or higher</span>
+            </li>
+          </ul>
+        </AlertDescription>
+      </Alert>
 
       {/* Upload Tips */}
       <div className="bg-blue-50 rounded-lg p-5">

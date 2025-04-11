@@ -7,6 +7,8 @@ import fs from "fs";
 import { insertDocumentSchema, insertExtractionSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+// Import the OCR service
+// import * as ocrService from "./services/ocrService";
 
 // Setup upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -129,36 +131,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "processing",
       });
       
-      // In a real application, we would initiate OCR processing here
-      // For now, we'll simulate processing by resolving after a short delay
-      
-      // Mock data for demonstration (would normally come from actual OCR processing)
-      const mockProcessingSuccess = Math.random() > 0.2; // 80% success rate for demo
-      
-      // In a production app, you'd use a job queue or similar for actual processing
+      // In a production app, this should trigger an async job through a queue
+      // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
-        if (mockProcessingSuccess) {
+        try {
+          // TODO: Implement actual OCR processing here using the ocrService
+          // When implemented, uncomment and use code like:
+          /*
+          // Process the document with OCR
+          const ocrResult = await ocrService.processDocument(document.storagePath);
+          
           // Update document to completed state
           await storage.updateDocument(id, {
             status: "completed",
           });
           
-          // Create basic extraction
+          // Create extraction with actual OCR data
           await storage.createExtraction({
             documentId: id,
-            vendorName: "",
-            invoiceNumber: "",
-            lineItems: [],
-            handwrittenNotes: [],
+            vendorName: ocrResult.vendorName,
+            invoiceNumber: ocrResult.invoiceNumber,
+            invoiceDate: ocrResult.invoiceDate,
+            dueDate: ocrResult.dueDate,
+            totalAmount: ocrResult.totalAmount,
+            taxAmount: ocrResult.taxAmount,
+            lineItems: ocrResult.lineItems,
+            handwrittenNotes: ocrResult.handwrittenNotes,
           });
-        } else {
-          // Update document to error state
+          */
+          
+          // For now, we'll just update the status to indicate processing is required
+          await storage.updateDocument(id, {
+            status: "needs_implementation",
+            errorMessage: "OCR processing service needs to be implemented"
+          });
+        } catch (error) {
+          console.error("Error in OCR processing:", error);
           await storage.updateDocument(id, {
             status: "error",
-            errorMessage: "Processing failed. Please try again."
+            errorMessage: "OCR processing failed: " + (error instanceof Error ? error.message : "Unknown error")
           });
         }
-      }, 5000); // Simulate 5 second processing
+      }, 1000);
       
       res.json(updatedDocument);
     } catch (error) {
