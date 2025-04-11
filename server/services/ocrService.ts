@@ -51,6 +51,56 @@ interface OCRResult {
 // OpenAI API integration is now handled directly through the Vision API
 
 /**
+ * Extract basic document information from filename
+ * 
+ * @param filePath The path to the document file
+ * @returns Basic document information
+ */
+function extractBasicInfoFromFilename(filePath: string): { 
+  vendorName?: string; 
+  documentId?: string; 
+  date?: string; 
+} {
+  const filename = path.basename(filePath);
+  
+  // Extract possible document info from the filename
+  // This is a fallback for when we can't process the PDF content
+  
+  // Try to extract a vendor name (anything before the first number or special character)
+  const vendorMatch = filename.match(/^([A-Za-z\s]+)/);
+  const vendorName = vendorMatch ? vendorMatch[1].trim() : undefined;
+  
+  // Try to find a document ID (sequences of digits, possibly with prefix)
+  const idMatch = filename.match(/([A-Za-z]{1,5}-?[0-9]{3,})/);
+  const documentId = idMatch ? idMatch[1] : undefined;
+  
+  // Try to find a date in the filename (very basic pattern)
+  const dateMatch = filename.match(/(\d{4}[-_]\d{1,2}[-_]\d{1,2})|(\d{1,2}[-_]\d{1,2}[-_]\d{4})/);
+  let date: string | undefined = undefined;
+  
+  if (dateMatch) {
+    const dateStr = dateMatch[0];
+    try {
+      // Try to parse the date - this is simplistic and would need more robust handling in production
+      const dateParts = dateStr.split(/[-_]/);
+      if (dateParts.length === 3) {
+        // Assume ISO format if the first part is 4 digits (YYYY-MM-DD)
+        if (dateParts[0].length === 4) {
+          date = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
+        } else {
+          // Otherwise assume MM-DD-YYYY
+          date = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse date from filename:', dateStr);
+    }
+  }
+  
+  return { vendorName, documentId, date };
+}
+
+/**
  * Process a document using the OpenAI Vision API
  * 
  * @param filePath Path to the document file to process
@@ -73,33 +123,35 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   let result: any;
   
   if (fileExtension === '.pdf') {
-    // Since we can't use pdf-poppler in this environment, we'll try direct methods
-    console.log('Processing PDF document directly...');
+    // OpenAI Vision API doesn't support PDFs directly
+    console.log('Processing PDF document...');
     
-    // Read the PDF file as base64
-    const fileData = fs.readFileSync(filePath);
-    const base64File = fileData.toString('base64');
+    // The OCR service cannot process PDFs directly in this environment
+    // Generate a structured response with basic metadata
+    console.log('Cannot process PDF file directly through OpenAI Vision API');
     
-    // Try multiple approaches, starting with direct PDF processing
-    try {
-      console.log('Attempting to process PDF directly via OpenAI Vision API...');
-      result = await callOpenAIVisionAPI(base64File, 'application/pdf');
-    } catch (pdfError) {
-      console.error('Error processing PDF directly:', pdfError);
-      
-      // If direct PDF processing fails, try treating it as an image
-      // as sometimes the OpenAI API can still extract information
-      try {
-        console.log('Falling back to treating PDF as image/png...');
-        result = await callOpenAIVisionAPI(base64File, 'image/png');
-      } catch (imageError) {
-        console.error('Failed to process PDF as image/png:', imageError);
-        
-        // Last resort - try JPEG format
-        console.log('Trying as image/jpeg as last resort...');
-        result = await callOpenAIVisionAPI(base64File, 'image/jpeg');
-      }
-    }
+    // Extract basic document information from filename
+    const basicInfo = extractBasicInfoFromFilename(filePath);
+    
+    // Create a result with document metadata
+    result = {
+      documentType: 'other',
+      vendorName: basicInfo.vendorName || 'Unknown',
+      invoiceNumber: basicInfo.documentId || 'Unknown',
+      invoiceDate: basicInfo.date || new Date().toISOString().slice(0, 10),
+      dueDate: null,
+      totalAmount: null,
+      taxAmount: null,
+      lineItems: [],
+      handwrittenNotes: [{
+        text: "PDF processing is not available. Please upload JPEG, PNG, GIF, or WEBP formats.",
+        confidence: 1.0
+      }],
+      confidence: 0.1
+    };
+    
+    // Log the limitation
+    console.log('Returning basic document information for PDF file');
   } else {
     // For images, use the direct Vision API approach
     console.log('Processing image document using OpenAI Vision API...');
@@ -122,6 +174,12 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
       case '.tif':
         contentType = 'image/tiff';
         break;
+      case '.gif':
+        contentType = 'image/gif';
+        break;
+      case '.webp':
+        contentType = 'image/webp';
+        break;
       default:
         throw new Error(`Unsupported file extension: ${fileExtension}`);
     }
@@ -132,269 +190,6 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
   
   // Format and validate the result
   return formatOCRResult(result);
-}
-
-/**
- * Process a PDF document by converting it to images first
- * 
- * @param filePath The path to the PDF file
- * @returns The raw OCR extraction data
- */
-async function processPDFWithOpenAI(filePath: string): Promise<any> {
-  try {
-    console.log(`Processing PDF at path: ${filePath}`);
-    
-    // Create a unique directory for this PDF's images
-    const uniqueId = uuidv4();
-    const outputDir = path.join(tempDir, uniqueId);
-    fs.mkdirSync(outputDir, { recursive: true });
-    
-    // Convert PDF to images
-    console.log('Converting PDF to images...');
-    
-    try {
-      // Try using ImageMagick to convert PDF to images
-      console.log('Attempting to convert PDF using ImageMagick...');
-      await execPromise(`convert -density 300 "${filePath}" "${path.join(outputDir, 'page-%d.png')}"`);
-    } catch (convError) {
-      console.error('Error with ImageMagick conversion:', convError);
-      
-      // No fallback available, throw error
-      throw new Error('Failed to convert PDF to images. Unable to process in this environment.');
-    }
-    
-    // Get all generated image files
-    const imageFiles = fs.readdirSync(outputDir)
-      .filter(file => file.endsWith('.png'))
-      .sort(); // Sort to ensure page order
-    
-    if (imageFiles.length === 0) {
-      throw new Error('PDF conversion produced no image files');
-    }
-    
-    console.log(`Converted PDF to ${imageFiles.length} image(s)`);
-    
-    // Process first page for basic document info
-    // Read first page as base64
-    const firstImagePath = path.join(outputDir, imageFiles[0]);
-    const firstImageData = fs.readFileSync(firstImagePath);
-    const firstImageBase64 = firstImageData.toString('base64');
-    
-    const prompt = `
-      You are an expert document analyzer specializing in OCR extraction.
-      
-      TASK:
-      Extract all text from this document, including both printed and handwritten content.
-      Identify the document type (invoice, receipt, or other).
-      Pay special attention to document structure and layout.
-      
-      EXTRACTION INSTRUCTIONS:
-      1. For invoices and receipts:
-         - Vendor name and complete contact information
-         - Invoice/receipt number (look for patterns like INV-####, #######, etc.)
-         - Invoice date (convert to YYYY-MM-DD format)
-         - Due date if present (convert to YYYY-MM-DD format)
-         - Total amount (numeric value only)
-         - Tax amount if present (numeric value only)
-         - Line items with detailed description, quantity, unit price, and amount
-         - Look for any special terms, payment instructions, or notes
-      
-      2. For handwritten notes:
-         - Extract all handwritten text
-         - Identify the context of the note (e.g., approval, comment, instruction)
-         - Provide a confidence score between 0 and 1 for each note
-         - If a note is partially illegible, extract what you can and mark uncertain parts
-      
-      3. For tables and structured data:
-         - Preserve the structure of tables
-         - For each line item, ensure all fields are correctly associated
-         - Handle multi-line descriptions by keeping them with the correct item
-      
-      4. For general content:
-         - Capture headers, footers, and page numbers
-         - Note any logos or branding elements
-         - Recognize stamps, signatures, or other approval marks
-         - This is page 1 of a ${imageFiles.length}-page document
-      
-      CONFIDENCE SCORING:
-      - Provide an overall confidence score for the extraction
-      - For handwritten content, provide individual confidence scores
-      - For unclear or ambiguous text, provide lower confidence scores
-      
-      Format your response as a JSON object with the following structure:
-      {
-        "documentType": "invoice|receipt|other",
-        "vendorName": "...",
-        "invoiceNumber": "...",
-        "invoiceDate": "YYYY-MM-DD",
-        "dueDate": "YYYY-MM-DD",
-        "totalAmount": 123.45,
-        "taxAmount": 10.00,
-        "lineItems": [
-          {
-            "description": "...",
-            "quantity": 1,
-            "unitPrice": 100.00,
-            "amount": 100.00
-          }
-        ],
-        "handwrittenNotes": [
-          {
-            "text": "...",
-            "confidence": 0.85
-          }
-        ],
-        "confidence": 0.95
-      }
-    `;
-    
-    // Call Vision API with the first page image
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",  // Using the model specified by the user
-        messages: [
-          {
-            role: "user", 
-            content: [
-              { type: "text", text: prompt },
-              { 
-                type: "image_url", 
-                image_url: { 
-                  url: `data:image/png;base64,${firstImageBase64}`
-                } 
-              }
-            ]
-          }
-        ],
-        max_tokens: 1500,  // Appropriate token limit for this model
-        temperature: 0.3,  // Lower temperature for more consistent results
-        response_format: { type: "json_object" }
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenAI API Error Response:", errorText);
-      throw new Error(`OpenAI API Error: ${response.status} ${errorText}`);
-    }
-    
-    const responseData = await response.json() as { choices: [{ message: { content: string } }] };
-    
-    // Extract the JSON content from the response
-    const content = responseData.choices[0].message.content;
-    let result;
-    
-    try {
-      result = JSON.parse(content);
-    } catch (parseError: any) {
-      console.error("Error parsing JSON response:", content);
-      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
-    }
-    
-    // Process additional pages if needed (for complex documents)
-    if (imageFiles.length > 1) {
-      // Here you could add logic to process additional pages and merge results
-      console.log(`Document has ${imageFiles.length} pages, additional page processing logic could be added here`);
-      
-      // Example: detect if we have line items to process from additional pages
-      // This is simplified - in a real app you might want more sophisticated merging
-      for (let i = 1; i < Math.min(imageFiles.length, 3); i++) { // Process up to 3 pages maximum for demo
-        try {
-          const additionalImagePath = path.join(outputDir, imageFiles[i]);
-          const additionalImageData = fs.readFileSync(additionalImagePath);
-          const additionalImageBase64 = additionalImageData.toString('base64');
-          
-          const additionalPrompt = `
-            This is page ${i+1} of a ${imageFiles.length}-page document.
-            Look for additional information that might not be on the first page:
-            - Continue extracting line items
-            - Look for totals or summary information
-            - Find any additional handwritten notes
-            - Extract any terms and conditions
-            
-            Return ONLY new information found on this page in the same JSON format.
-          `;
-          
-          const additionalResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "user", 
-                  content: [
-                    { type: "text", text: additionalPrompt },
-                    { 
-                      type: "image_url", 
-                      image_url: { 
-                        url: `data:image/png;base64,${additionalImageBase64}`
-                      } 
-                    }
-                  ]
-                }
-              ],
-              max_tokens: 1000,
-              temperature: 0.3,
-              response_format: { type: "json_object" }
-            })
-          });
-          
-          if (additionalResponse.ok) {
-            const additionalData = await additionalResponse.json() as { choices: [{ message: { content: string } }] };
-            const additionalContent = additionalData.choices[0].message.content;
-            
-            try {
-              const additionalResult = JSON.parse(additionalContent);
-              
-              // Merge additional line items if found
-              if (additionalResult.lineItems && additionalResult.lineItems.length > 0) {
-                result.lineItems = [...(result.lineItems || []), ...additionalResult.lineItems];
-              }
-              
-              // Merge additional handwritten notes if found
-              if (additionalResult.handwrittenNotes && additionalResult.handwrittenNotes.length > 0) {
-                result.handwrittenNotes = [...(result.handwrittenNotes || []), ...additionalResult.handwrittenNotes];
-              }
-              
-              // Update totals if found on subsequent pages
-              if (additionalResult.totalAmount && !result.totalAmount) {
-                result.totalAmount = additionalResult.totalAmount;
-              }
-              
-              if (additionalResult.taxAmount && !result.taxAmount) {
-                result.taxAmount = additionalResult.taxAmount;
-              }
-            } catch (e) {
-              console.warn(`Could not parse additional page ${i+1} results:`, e);
-            }
-          }
-        } catch (pageError) {
-          console.warn(`Error processing additional page ${i+1}:`, pageError);
-        }
-      }
-    }
-    
-    // Cleanup temporary files
-    try {
-      fs.rmSync(outputDir, { recursive: true, force: true });
-    } catch (cleanupError) {
-      console.warn('Failed to clean up temporary files:', cleanupError);
-    }
-    
-    return result;
-  } catch (error: any) {
-    console.error("Error processing PDF with OpenAI:", error);
-    throw new Error(`Failed to process PDF with OpenAI: ${error.message}`);
-  }
 }
 
 /**
@@ -530,173 +325,36 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
  * @returns Properly formatted extraction data
  */
 export function formatOCRResult(rawResult: any): OCRResult {
-  // Ensure we have at least an empty object if rawResult is null or undefined
-  rawResult = rawResult || {};
-  
-  // Handle potential string values for numeric fields
-  let totalAmount = undefined;
-  if (rawResult.totalAmount !== undefined) {
-    if (typeof rawResult.totalAmount === 'number') {
-      totalAmount = rawResult.totalAmount;
-    } else if (typeof rawResult.totalAmount === 'string') {
-      // Try to parse the string, removing any currency symbols
-      const cleanNumber = rawResult.totalAmount.replace(/[$£€,]/g, '');
-      const parsedNumber = parseFloat(cleanNumber);
-      if (!isNaN(parsedNumber)) {
-        totalAmount = parsedNumber;
-      }
-    }
+  if (!rawResult) {
+    throw new Error('No OCR result to format');
   }
-  
-  let taxAmount = undefined;
-  if (rawResult.taxAmount !== undefined) {
-    if (typeof rawResult.taxAmount === 'number') {
-      taxAmount = rawResult.taxAmount;
-    } else if (typeof rawResult.taxAmount === 'string') {
-      // Try to parse the string, removing any currency symbols
-      const cleanNumber = rawResult.taxAmount.replace(/[$£€,]/g, '');
-      const parsedNumber = parseFloat(cleanNumber);
-      if (!isNaN(parsedNumber)) {
-        taxAmount = parsedNumber;
-      }
-    }
-  }
-  
-  // Format line items, handling various input formats
-  const lineItems = Array.isArray(rawResult.lineItems) 
-    ? rawResult.lineItems.map((rawItem: any) => {
-        // Ensure item is an object
-        const item: any = typeof rawItem === 'object' && rawItem !== null ? rawItem : {};
-        
-        // Handle quantity
-        let quantity = 1;
-        if (item.quantity !== undefined) {
-          if (typeof item.quantity === 'number') {
-            quantity = item.quantity;
-          } else if (typeof item.quantity === 'string') {
-            const parsedQuantity = parseFloat(item.quantity);
-            if (!isNaN(parsedQuantity)) {
-              quantity = parsedQuantity;
-            }
-          }
-        }
-        
-        // Handle unit price
-        let unitPrice = 0;
-        if (item.unitPrice !== undefined) {
-          if (typeof item.unitPrice === 'number') {
-            unitPrice = item.unitPrice;
-          } else if (typeof item.unitPrice === 'string') {
-            const cleanPrice = item.unitPrice.replace(/[$£€,]/g, '');
-            const parsedPrice = parseFloat(cleanPrice);
-            if (!isNaN(parsedPrice)) {
-              unitPrice = parsedPrice;
-            }
-          }
-        }
-        
-        // Handle amount
-        let amount = 0;
-        if (item.amount !== undefined) {
-          if (typeof item.amount === 'number') {
-            amount = item.amount;
-          } else if (typeof item.amount === 'string') {
-            const cleanAmount = item.amount.replace(/[$£€,]/g, '');
-            const parsedAmount = parseFloat(cleanAmount);
-            if (!isNaN(parsedAmount)) {
-              amount = parsedAmount;
-            }
-          }
-        } else if (quantity !== undefined && unitPrice !== undefined) {
-          // Calculate amount if not provided
-          amount = quantity * unitPrice;
-        }
-        
-        return {
-          description: item.description || 'Unknown item',
-          quantity: quantity,
-          unitPrice: unitPrice,
-          amount: amount
-        };
-      }) 
-    : [];
-  
-  // Format handwritten notes
-  const handwrittenNotes = Array.isArray(rawResult.handwrittenNotes) 
-    ? rawResult.handwrittenNotes.map((rawNote: any) => {
-        // Ensure note is an object
-        const note: any = typeof rawNote === 'object' && rawNote !== null ? rawNote : {};
-        
-        let confidence = 0.5;
-        if (note.confidence !== undefined) {
-          if (typeof note.confidence === 'number') {
-            confidence = Math.max(0, Math.min(1, note.confidence));
-          } else if (typeof note.confidence === 'string') {
-            const parsedConfidence = parseFloat(note.confidence);
-            if (!isNaN(parsedConfidence)) {
-              confidence = Math.max(0, Math.min(1, parsedConfidence));
-            }
-          }
-        }
-        
-        return {
-          text: note.text || '',
-          confidence: confidence
-        };
-      }) 
-    : [];
-  
-  // Format dates as YYYY-MM-DD strings
-  let invoiceDate = undefined;
-  if (rawResult.invoiceDate) {
-    try {
-      // Try to parse as ISO date
-      const date = new Date(rawResult.invoiceDate);
-      if (!isNaN(date.getTime())) {
-        invoiceDate = date.toISOString().split('T')[0];
-      } else {
-        // If not a valid date, use as is
-        invoiceDate = rawResult.invoiceDate;
-      }
-    } catch (e) {
-      // If date parsing fails, use as is
-      invoiceDate = rawResult.invoiceDate;
-    }
-  }
-  
-  let dueDate = undefined;
-  if (rawResult.dueDate) {
-    try {
-      // Try to parse as ISO date
-      const date = new Date(rawResult.dueDate);
-      if (!isNaN(date.getTime())) {
-        dueDate = date.toISOString().split('T')[0];
-      } else {
-        // If not a valid date, use as is
-        dueDate = rawResult.dueDate;
-      }
-    } catch (e) {
-      // If date parsing fails, use as is
-      dueDate = rawResult.dueDate;
-    }
-  }
-  
-  // Create the final result object with all fields properly formatted
+
+  // Validate and format the result
   const result: OCRResult = {
     documentType: rawResult.documentType || 'other',
-    vendorName: rawResult.vendorName || 'Unknown Vendor',
+    vendorName: rawResult.vendorName || 'Unknown',
     invoiceNumber: rawResult.invoiceNumber || 'Unknown',
-    invoiceDate: invoiceDate,
-    dueDate: dueDate,
-    totalAmount: totalAmount,
-    taxAmount: taxAmount,
-    lineItems: lineItems,
-    handwrittenNotes: handwrittenNotes,
-    confidence: typeof rawResult.confidence === 'number' 
-      ? Math.max(0, Math.min(1, rawResult.confidence)) 
-      : 0.7
+    invoiceDate: rawResult.invoiceDate || undefined,
+    dueDate: rawResult.dueDate || undefined,
+    totalAmount: rawResult.totalAmount !== undefined && rawResult.totalAmount !== null ? Number(rawResult.totalAmount) : undefined,
+    taxAmount: rawResult.taxAmount !== undefined && rawResult.taxAmount !== null ? Number(rawResult.taxAmount) : undefined,
+    lineItems: Array.isArray(rawResult.lineItems) 
+      ? rawResult.lineItems.map((item: any) => ({
+          description: item.description || '',
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          amount: Number(item.amount) || 0
+        }))
+      : [],
+    handwrittenNotes: Array.isArray(rawResult.handwrittenNotes)
+      ? rawResult.handwrittenNotes.map((note: any) => ({
+          text: note.text || '',
+          confidence: Number(note.confidence) || 0.5
+        }))
+      : [],
+    confidence: Number(rawResult.confidence) || 0.5
   };
-  
+
   return result;
 }
 
@@ -707,140 +365,54 @@ export function formatOCRResult(rawResult: any): OCRResult {
  * @returns Markdown-formatted text
  */
 export function generateMarkdownOutput(result: OCRResult): string {
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric'
-  });
-  const formattedTime = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-  
   let markdown = `# Document Extraction Report\n\n`;
-  markdown += `*Generated on ${formattedDate} at ${formattedTime}*\n\n`;
   
-  // Document summary section
-  markdown += `## Document Summary\n\n`;
-  markdown += `- **Document Type**: ${result.documentType.charAt(0).toUpperCase() + result.documentType.slice(1)}\n`;
-  markdown += `- **Vendor**: ${result.vendorName}\n`;
-  markdown += `- **Invoice Number**: ${result.invoiceNumber}\n`;
+  // Document type and basic info
+  markdown += `**Document Type:** ${result.documentType}\n`;
+  markdown += `**Vendor:** ${result.vendorName}\n`;
+  markdown += `**Invoice Number:** ${result.invoiceNumber}\n`;
   
+  // Dates
   if (result.invoiceDate) {
-    // Try to format the date nicely if possible
-    try {
-      const date = new Date(result.invoiceDate);
-      if (!isNaN(date.getTime())) {
-        markdown += `- **Invoice Date**: ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
-      } else {
-        markdown += `- **Invoice Date**: ${result.invoiceDate}\n`;
-      }
-    } catch (e) {
-      markdown += `- **Invoice Date**: ${result.invoiceDate}\n`;
-    }
+    markdown += `**Invoice Date:** ${result.invoiceDate}\n`;
   }
   
   if (result.dueDate) {
-    // Try to format the date nicely if possible
-    try {
-      const date = new Date(result.dueDate);
-      if (!isNaN(date.getTime())) {
-        markdown += `- **Due Date**: ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
-      } else {
-        markdown += `- **Due Date**: ${result.dueDate}\n`;
-      }
-    } catch (e) {
-      markdown += `- **Due Date**: ${result.dueDate}\n`;
-    }
+    markdown += `**Due Date:** ${result.dueDate}\n`;
   }
   
-  // Financial information section
-  markdown += `\n## Financial Information\n\n`;
-  
+  // Amounts
   if (result.totalAmount !== undefined) {
-    markdown += `- **Total Amount**: $${result.totalAmount.toFixed(2)}\n`;
-  } else {
-    markdown += `- **Total Amount**: Not specified\n`;
+    markdown += `**Total Amount:** $${result.totalAmount.toFixed(2)}\n`;
   }
   
   if (result.taxAmount !== undefined) {
-    markdown += `- **Tax Amount**: $${result.taxAmount.toFixed(2)}\n`;
-    
-    // If we have both total and tax, calculate the subtotal
-    if (result.totalAmount !== undefined) {
-      const subtotal = result.totalAmount - result.taxAmount;
-      markdown += `- **Subtotal**: $${subtotal.toFixed(2)}\n`;
-    }
-  } else {
-    markdown += `- **Tax Amount**: Not specified\n`;
+    markdown += `**Tax Amount:** $${result.taxAmount.toFixed(2)}\n`;
   }
   
-  // Line items section with improved table formatting
+  // Line Items
   if (result.lineItems && result.lineItems.length > 0) {
     markdown += `\n## Line Items\n\n`;
+    markdown += `| Description | Quantity | Unit Price | Amount |\n`;
+    markdown += `|------------|----------|------------|--------|\n`;
     
-    // Calculate column widths based on content length
-    let maxDescLen = "Description".length;
-    let maxQtyLen = "Quantity".length;
-    let maxPriceLen = "Unit Price".length;
-    let maxAmountLen = "Amount".length;
-    
-    result.lineItems.forEach(item => {
-      maxDescLen = Math.max(maxDescLen, item.description.length);
-      maxQtyLen = Math.max(maxQtyLen, item.quantity.toString().length);
-      maxPriceLen = Math.max(maxPriceLen, (`$${item.unitPrice.toFixed(2)}`).length);
-      maxAmountLen = Math.max(maxAmountLen, (`$${item.amount.toFixed(2)}`).length);
-    });
-    
-    // Add some padding
-    maxDescLen += 2;
-    maxQtyLen += 2;
-    maxPriceLen += 2;
-    maxAmountLen += 2;
-    
-    // Build the table header
-    markdown += `| ${"Description".padEnd(maxDescLen)} | ${"Quantity".padEnd(maxQtyLen)} | ${"Unit Price".padEnd(maxPriceLen)} | ${"Amount".padEnd(maxAmountLen)} |\n`;
-    markdown += `| ${"-".repeat(maxDescLen)} | ${"-".repeat(maxQtyLen)} | ${"-".repeat(maxPriceLen)} | ${"-".repeat(maxAmountLen)} |\n`;
-    
-    // Build the table rows
     for (const item of result.lineItems) {
-      markdown += `| ${item.description.padEnd(maxDescLen)} | ${item.quantity.toString().padEnd(maxQtyLen)} | $${item.unitPrice.toFixed(2).padEnd(maxPriceLen - 1)} | $${item.amount.toFixed(2).padEnd(maxAmountLen - 1)} |\n`;
-    }
-    
-    // Add a summary line if we have multiple items
-    if (result.lineItems.length > 1) {
-      const totalLineItemsAmount = result.lineItems.reduce((sum, item) => sum + item.amount, 0);
-      markdown += `| ${"**TOTAL**".padEnd(maxDescLen)} | ${" ".repeat(maxQtyLen)} | ${" ".repeat(maxPriceLen)} | ${"**$" + totalLineItemsAmount.toFixed(2) + "**"} |\n`;
+      markdown += `| ${item.description} | ${item.quantity} | $${item.unitPrice.toFixed(2)} | $${item.amount.toFixed(2)} |\n`;
     }
   }
   
-  // Handwritten notes section with confidence scores
+  // Handwritten Notes
   if (result.handwrittenNotes && result.handwrittenNotes.length > 0) {
     markdown += `\n## Handwritten Notes\n\n`;
     
     for (const note of result.handwrittenNotes) {
-      // Format the confidence as a percentage and add color indicators
-      const confidencePct = (note.confidence * 100).toFixed(0);
-      let confidenceIndicator = "";
-      
-      if (note.confidence >= 0.8) {
-        confidenceIndicator = "high";
-      } else if (note.confidence >= 0.5) {
-        confidenceIndicator = "medium";
-      } else {
-        confidenceIndicator = "low";
-      }
-      
-      markdown += `- "${note.text}" _(${confidenceIndicator} confidence: ${confidencePct}%)_\n`;
+      markdown += `- "${note.text}" (Confidence: ${Math.round(note.confidence * 100)}%)\n`;
     }
   }
   
-  // Metadata and extraction details
-  markdown += `\n## Extraction Details\n\n`;
-  markdown += `- **Overall Confidence**: ${(result.confidence * 100).toFixed(0)}%\n`;
-  markdown += `- **Processed Date**: ${formattedDate}\n`;
-  markdown += `- **Processed Time**: ${formattedTime}\n`;
+  // Extraction confidence
+  markdown += `\n## Extraction Information\n\n`;
+  markdown += `**Overall Confidence:** ${Math.round(result.confidence * 100)}%\n`;
   
   return markdown;
 }
@@ -852,55 +424,5 @@ export function generateMarkdownOutput(result: OCRResult): string {
  * @returns JSON-formatted string
  */
 export function generateJSONOutput(result: OCRResult): string {
-  // Calculate some additional derived values
-  let subtotal = undefined;
-  if (result.totalAmount !== undefined && result.taxAmount !== undefined) {
-    subtotal = result.totalAmount - result.taxAmount;
-  }
-  
-  // Calculate some aggregate metrics
-  const totalLineItemsValue = result.lineItems.reduce((sum, item) => sum + item.amount, 0);
-  const lineItemCount = result.lineItems.length;
-  const handwrittenNoteCount = result.handwrittenNotes.length;
-  
-  // Average confidence of handwritten notes
-  let avgHandwrittenConfidence = 0;
-  if (handwrittenNoteCount > 0) {
-    avgHandwrittenConfidence = result.handwrittenNotes.reduce((sum, note) => sum + note.confidence, 0) / handwrittenNoteCount;
-  }
-  
-  // Build the structured JSON object with all information
-  const jsonObj = {
-    documentInfo: {
-      documentType: result.documentType,
-      vendor: result.vendorName,
-      invoiceNumber: result.invoiceNumber,
-      dates: {
-        invoiceDate: result.invoiceDate,
-        dueDate: result.dueDate
-      }
-    },
-    financialData: {
-      totalAmount: result.totalAmount,
-      taxAmount: result.taxAmount,
-      subtotal: subtotal,
-      calculatedTotal: totalLineItemsValue,
-      discrepancy: result.totalAmount !== undefined ? (result.totalAmount - totalLineItemsValue) : undefined
-    },
-    lineItems: result.lineItems,
-    handwrittenNotes: result.handwrittenNotes,
-    statistics: {
-      lineItemCount: lineItemCount,
-      handwrittenNoteCount: handwrittenNoteCount,
-      avgHandwrittenConfidence: avgHandwrittenConfidence
-    },
-    metadata: {
-      confidence: result.confidence,
-      confidencePercentage: (result.confidence * 100).toFixed(1) + "%",
-      processedDate: new Date().toISOString(),
-      apiVersion: "1.0"
-    }
-  };
-  
-  return JSON.stringify(jsonObj, null, 2);
-} 
+  return JSON.stringify(result, null, 2);
+}

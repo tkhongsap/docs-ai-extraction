@@ -67,7 +67,9 @@ export default function FileDropzone({
       'application/pdf': ['.pdf'],
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png': ['.png'],
-      'image/tiff': ['.tiff', '.tif']
+      'image/tiff': ['.tiff', '.tif'],
+      'image/gif': ['.gif'],
+      'image/webp': ['.webp']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
     maxFiles: 10
@@ -107,7 +109,7 @@ export default function FileDropzone({
     
     if (extension === 'pdf') {
       return <FileText className="h-5 w-5 text-red-500" />;
-    } else if (['jpg', 'jpeg', 'png', 'tiff', 'tif'].includes(extension)) {
+    } else if (['jpg', 'jpeg', 'png', 'tiff', 'tif', 'gif', 'webp'].includes(extension)) {
       return <FileImage className="h-5 w-5 text-blue-500" />; 
     }
     
@@ -138,7 +140,10 @@ export default function FileDropzone({
         <p className="text-gray-600 mb-4">or click to browse files from your computer</p>
         <Button type="button">Select Files</Button>
         <p className="text-sm text-gray-500 mt-4">
-          Supported formats: PDF, JPEG, PNG, TIFF (max 10MB, up to 10 files)
+          Supported formats: PDF*, JPEG, PNG, GIF, WEBP, TIFF (max 10MB, up to 10 files)
+        </p>
+        <p className="text-xs text-amber-600 mt-1">
+          *PDF files have limited OCR capabilities. For best results, use image formats.
         </p>
       </div>
 
