@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Download, Trash } from "lucide-react";
+import { Download, Trash, FileText, AlertCircle, Clock, CheckCircle } from "lucide-react";
 import { Document } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
@@ -9,16 +9,40 @@ interface DocumentCardProps {
 }
 
 export default function DocumentCard({ document, onDelete }: DocumentCardProps) {
-  const getStatusBadgeColor = (status: string) => {
+  const getStatusInfo = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-500";
+        return {
+          bgColor: "bg-green-500",
+          textColor: "text-green-800",
+          bgLight: "bg-green-100",
+          icon: <CheckCircle className="h-4 w-4 mr-1" />,
+          label: "Completed"
+        };
       case "processing":
-        return "bg-yellow-500";
+        return {
+          bgColor: "bg-yellow-500",
+          textColor: "text-yellow-800",
+          bgLight: "bg-yellow-100",
+          icon: <Clock className="h-4 w-4 mr-1 animate-pulse" />,
+          label: "Processing"
+        };
       case "error":
-        return "bg-red-500";
+        return {
+          bgColor: "bg-red-500",
+          textColor: "text-red-800",
+          bgLight: "bg-red-100",
+          icon: <AlertCircle className="h-4 w-4 mr-1" />,
+          label: "Error"
+        };
       default:
-        return "bg-gray-500";
+        return {
+          bgColor: "bg-gray-500",
+          textColor: "text-gray-800",
+          bgLight: "bg-gray-100",
+          icon: <FileText className="h-4 w-4 mr-1" />,
+          label: "Uploaded"
+        };
     }
   };
 
@@ -52,28 +76,39 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
     return fileType.split("/")[1]?.toUpperCase() || "FILE";
   };
 
+  const statusInfo = getStatusInfo(document.status);
+
   return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-200">
       <div className="h-40 bg-gray-100 relative">
-        {/* We don't show actual document previews as they would require additional processing */}
+        {/* Document thumbnail */}
         <div className="w-full h-full flex items-center justify-center bg-gray-100">
           <i className={`${getFileIconClass(document.fileType)} text-4xl`}></i>
         </div>
-        <div className={`absolute top-2 right-2 ${getStatusBadgeColor(document.status)} text-white text-xs px-2 py-1 rounded-full`}>
-          {document.status.charAt(0).toUpperCase() + document.status.slice(1)}
+        
+        {/* Status badge */}
+        <div className={`absolute top-2 right-2 ${statusInfo.bgColor} text-white text-xs px-2 py-1 rounded-full flex items-center`}>
+          {statusInfo.icon}
+          {statusInfo.label}
         </div>
       </div>
       <div className="p-4">
-        <h3 className="font-bold text-gray-800 mb-1">{document.originalFilename}</h3>
+        <h3 className="font-bold text-gray-800 mb-1 truncate" title={document.originalFilename}>
+          {document.originalFilename}
+        </h3>
         <p className="text-gray-500 text-sm mb-3">
           Uploaded {formatDistanceToNow(new Date(document.uploadDate), { addSuffix: true })}
         </p>
         <div className="flex flex-wrap gap-2 mb-3">
-          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center">
             {getDocumentType(document.originalFilename, document.fileType)}
           </span>
           <span className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
             {formatFileType(document.fileType)}
+          </span>
+          <span className={`${statusInfo.bgLight} ${statusInfo.textColor} text-xs px-2 py-1 rounded flex items-center`}>
+            {statusInfo.icon}
+            {statusInfo.label}
           </span>
         </div>
         <div className="flex justify-between">
@@ -86,7 +121,7 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
               <Download className="h-4 w-4" />
             </button>
             <button 
-              className="text-gray-500 hover:text-gray-700" 
+              className="text-gray-500 hover:text-red-700" 
               title="Delete"
               onClick={() => onDelete && onDelete(document.id)}
             >
@@ -94,15 +129,19 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
             </button>
           </div>
           {document.status === "completed" ? (
-            <Link href={`/review/${document.id}`} className="text-primary text-sm font-medium hover:underline">
+            <Link href={`/review/${document.id}`} className="text-primary text-sm font-medium hover:underline flex items-center">
               View Details
             </Link>
           ) : document.status === "processing" ? (
-            <span className="text-gray-400 cursor-not-allowed text-sm font-medium">Processing...</span>
+            <Link href={`/processing`} className="text-yellow-600 text-sm font-medium hover:underline flex items-center">
+              View Progress
+            </Link>
           ) : document.status === "error" ? (
-            <span className="text-red-500 text-sm font-medium">Error</span>
+            <span className="text-red-500 text-sm font-medium flex items-center">
+              <AlertCircle className="h-3 w-3 mr-1" /> Error
+            </span>
           ) : (
-            <Link href={`/processing`} className="text-primary text-sm font-medium hover:underline">
+            <Link href={`/processing`} className="text-primary text-sm font-medium hover:underline flex items-center">
               Process
             </Link>
           )}
