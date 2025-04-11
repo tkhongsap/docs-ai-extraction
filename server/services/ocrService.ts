@@ -169,30 +169,31 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
  */
 async function processPdfWithMistralAI(filePath: string): Promise<any> {
   try {
-    console.log('Uploading PDF file to Mistral AI...');
+    console.log('Processing PDF file with Mistral AI...');
     
+    // For PDFs, we directly use the OCR API with the local file path
+    // Convert the file to base64
     const fileContent = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
+    const base64File = fileContent.toString('base64');
     
-    // Upload the file to Mistral
-    const uploadedFile = await mistralClient.files.upload({
-      file: {
-        fileName: fileName,
-        content: fileContent,
-      },
-      purpose: "ocr"
-    });
+    // Process the PDF using Mistral OCR with document_url
+    // We need to create a data URL from the base64 content
+    const contentType = 'application/pdf';
+    const dataUrl = `data:${contentType};base64,${base64File}`;
     
-    console.log(`File uploaded to Mistral AI with ID: ${uploadedFile.id}`);
+    console.log('Calling Mistral OCR API with PDF data...');
     
     // Process the uploaded file with Mistral OCR
     const ocrResponse = await mistralClient.ocr.process({
       model: "mistral-ocr-latest",
       document: {
-        type: "file_id",
-        fileId: uploadedFile.id,
-      }
+        type: "image_url", // Using image_url type with data URL
+        imageUrl: dataUrl
+      },
+      includeImageBase64: false
     });
+    
+    console.log('PDF successfully processed by Mistral OCR');
     
     // Extract the structured information from the OCR response
     return parseMistralOCRResponse(ocrResponse);
@@ -212,31 +213,51 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing image with Mistral AI OCR...');
     
-    // Create a temporary unique URL-like name for the file reference
-    const fileName = path.basename(filePath);
-    
-    // Upload the image file to Mistral for OCR processing
+    // Read the image file
     const fileContent = fs.readFileSync(filePath);
+    const base64File = fileContent.toString('base64');
     
-    // Upload the file to Mistral
-    const uploadedFile = await mistralClient.files.upload({
-      file: {
-        fileName: fileName,
-        content: fileContent,
-      },
-      purpose: "ocr"
-    });
+    // Determine content type based on file extension
+    const fileExtension = path.extname(filePath).toLowerCase();
+    let contentType: string;
+    switch (fileExtension) {
+      case '.jpg':
+      case '.jpeg':
+        contentType = 'image/jpeg';
+        break;
+      case '.png':
+        contentType = 'image/png';
+        break;
+      case '.tiff':
+      case '.tif':
+        contentType = 'image/tiff';
+        break;
+      case '.gif':
+        contentType = 'image/gif';
+        break;
+      case '.webp':
+        contentType = 'image/webp';
+        break;
+      default:
+        contentType = 'image/jpeg'; // Default content type
+    }
     
-    console.log(`File uploaded to Mistral AI with ID: ${uploadedFile.id}`);
+    // Create a data URL for the image
+    const dataUrl = `data:${contentType};base64,${base64File}`;
     
-    // Process the uploaded file with Mistral OCR
+    console.log('Calling Mistral OCR API with image data...');
+    
+    // Process with Mistral OCR
     const ocrResponse = await mistralClient.ocr.process({
       model: "mistral-ocr-latest",
       document: {
-        type: "file_id",
-        fileId: uploadedFile.id,
-      }
+        type: "image_url",
+        imageUrl: dataUrl
+      },
+      includeImageBase64: false
     });
+    
+    console.log('Image successfully processed by Mistral OCR');
     
     // Extract the structured information from the OCR response
     return parseMistralOCRResponse(ocrResponse);
@@ -342,7 +363,7 @@ Format your response as a JSON object with the following structure:
 `;
 
     // Use Mistral AI chat to analyze the extracted text
-    const chatResponse = await mistralClient.chat({
+    const chatResponse = await mistralClient.chat.complete({
       model: "mistral-large-latest",
       messages: [
         { role: "user", content: prompt }
