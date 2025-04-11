@@ -652,7 +652,7 @@ export default function ExtractedDataViewer({
                 <div>
                   <p className="text-sm text-gray-500">File Type</p>
                   <p className="text-sm font-medium">
-                    {extraction.documentId ? (extraction.documentId ? "PDF/Image" : "Unknown") : "Unknown"}
+                    PDF/Image
                   </p>
                 </div>
                 <div>
@@ -762,7 +762,7 @@ export default function ExtractedDataViewer({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Extract Date</p>
-                  <p className="text-sm font-medium">{new Date(extraction.processedAt || Date.now()).toLocaleDateString()}</p>
+                  <p className="text-sm font-medium">{new Date().toLocaleDateString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Status</p>

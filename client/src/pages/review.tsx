@@ -1,12 +1,14 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Check } from "lucide-react";
+import { ArrowLeft, RefreshCw, Check, Copy, Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Document, Extraction } from "@shared/schema";
 import DocumentPreview from "@/components/document-preview";
 import ExtractedDataViewer from "@/components/extracted-data-viewer";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Review() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +16,25 @@ export default function Review() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isDataUpdated, setIsDataUpdated] = useState(false);
+  const [documentScrollPosition, setDocumentScrollPosition] = useState<number>(0);
+  const isMobile = useIsMobile();
+  
+  // Handle copy document link to clipboard
+  const copyDocumentLink = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({
+        title: "Link Copied",
+        description: "Document link copied to clipboard.",
+      });
+    }).catch((err) => {
+      toast({
+        title: "Copy Failed",
+        description: "Could not copy link to clipboard.",
+        variant: "destructive"
+      });
+    });
+  };
   
   // Get document details
   const { data: document, isLoading: isDocumentLoading } = useQuery<Document>({
@@ -183,20 +204,85 @@ export default function Review() {
         </div>
       </div>
 
+      {/* Additional actions */}
+      <div className="flex mb-4 flex-wrap gap-2">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={copyDocumentLink}
+        >
+          <Copy className="mr-2 h-4 w-4" />
+          Copy Link
+        </Button>
+        
+        {extraction && (
+          <>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open(`/api/extractions/${extraction.id}/export/json`, "_blank")}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open(`/api/extractions/${extraction.id}/export/markdown`, "_blank")}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Markdown
+            </Button>
+          </>
+        )}
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => window.open(`/api/documents/${id}/file`, "_blank")}
+        >
+          <Eye className="mr-2 h-4 w-4" />
+          View Original
+        </Button>
+        
+        {document.status === 'completed' && (
+          <Badge className="ml-auto bg-green-100 text-green-800 border-green-200">
+            OCR Complete
+          </Badge>
+        )}
+        
+        {document.status === 'processing' && (
+          <Badge className="ml-auto bg-blue-100 text-blue-800 border-blue-200">
+            Processing
+          </Badge>
+        )}
+        
+        {document.status === 'error' && (
+          <Badge className="ml-auto bg-red-100 text-red-800 border-red-200">
+            Error
+          </Badge>
+        )}
+      </div>
+
       {/* Main Content: Document and Data View */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Original Document */}
-        <div className="lg:order-1 order-2">
-          <DocumentPreview document={document} />
+        <div className={`${isMobile ? 'order-2' : 'order-1'}`}>
+          <DocumentPreview 
+            document={document} 
+            onScroll={(position) => setDocumentScrollPosition(position)}
+          />
         </div>
         
         {/* Extracted Data */}
-        <div className="lg:order-2 order-1">
+        <div className={`${isMobile ? 'order-1' : 'order-2'}`}>
           {extraction ? (
             <ExtractedDataViewer 
               extraction={extraction} 
               documentId={parseInt(id)}
               onDataUpdated={handleDataUpdated}
+              documentScrollPosition={documentScrollPosition}
             />
           ) : (
             <div className="bg-white rounded-lg shadow-sm p-4">
@@ -218,6 +304,19 @@ export default function Review() {
           )}
         </div>
       </div>
+      
+      {/* Document processing tips */}
+      {document.status === 'completed' && (
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-blue-800 mb-2">Tips for Reviewing OCR Results</h3>
+          <ul className="text-xs text-blue-700 list-disc pl-4 space-y-1">
+            <li>Carefully review all extracted fields for accuracy, especially numerical values</li>
+            <li>Handwritten notes may require more careful verification than printed text</li>
+            <li>Use the Edit button in the Extracted Data panel to correct any errors</li>
+            <li>For poor quality scans, consider reprocessing the document or manually editing the data</li>
+          </ul>
+        </div>
+      )}
       
       {/* Action Buttons */}
       <div className="mt-8 flex justify-between">
