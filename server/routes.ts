@@ -25,7 +25,7 @@ const storage_config = multer.diskStorage({
     // Create a unique filename with original name
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
-    cb(null, uniqueSuffix + ext);
+    cb(null, Buffer.from(file.originalname, 'latin1').toString('utf8'));
   },
 });
 
@@ -147,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const documentData = {
-        originalFilename: req.file.originalname,
+        originalFilename: Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
         fileSize: req.file.size,
         fileType: req.file.mimetype,
         status: "uploaded",
