@@ -1,5 +1,6 @@
-import { documents, type Document, type InsertDocument } from "@shared/schema";
-import { extractions, type Extraction, type InsertExtraction } from "@shared/schema";
+import { documents, extractions, type Document, type InsertDocument, type Extraction, type InsertExtraction } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Document operations
@@ -43,12 +44,13 @@ export class MemStorage implements IStorage {
 
   async createDocument(doc: InsertDocument): Promise<Document> {
     const id = this.docCurrentId++;
-    const uploadDate = doc.uploadDate || new Date();
+    const uploadDate = new Date();
     
     const document: Document = { 
       ...doc, 
       id, 
-      uploadDate
+      uploadDate, 
+      errorMessage: doc.errorMessage || null
     };
     
     this.documents.set(id, document);
@@ -91,7 +93,20 @@ export class MemStorage implements IStorage {
 
   async createExtraction(extraction: InsertExtraction): Promise<Extraction> {
     const id = this.extractionCurrentId++;
-    const newExtraction: Extraction = { ...extraction, id };
+    const newExtraction: Extraction = { 
+      ...extraction, 
+      id,
+      vendorName: extraction.vendorName || null,
+      invoiceNumber: extraction.invoiceNumber || null,
+      invoiceDate: extraction.invoiceDate || null,
+      dueDate: extraction.dueDate || null,
+      totalAmount: extraction.totalAmount || null,
+      taxAmount: extraction.taxAmount || null,
+      lineItems: extraction.lineItems || null,
+      handwrittenNotes: extraction.handwrittenNotes || null,
+      markdownOutput: extraction.markdownOutput || null,
+      jsonOutput: extraction.jsonOutput || null
+    };
     this.extractions.set(id, newExtraction);
     return newExtraction;
   }
@@ -106,4 +121,99 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // Document operations
+  async getDocuments(): Promise<Document[]> {
+    return db.select().from(documents).orderBy(desc(documents.uploadDate));
+  }
+
+  async getDocument(id: number): Promise<Document | undefined> {
+    const [document] = await db.select().from(documents).where(eq(documents.id, id));
+    return document;
+  }
+
+  async createDocument(doc: InsertDocument): Promise<Document> {
+    // Ensure we have default values for optional fields
+    const docWithDefaults = {
+      ...doc,
+      errorMessage: doc.errorMessage || null
+    };
+    
+    const [document] = await db.insert(documents).values(docWithDefaults).returning();
+    return document;
+  }
+
+  async updateDocument(id: number, data: Partial<Document>): Promise<Document | undefined> {
+    const [document] = await db
+      .update(documents)
+      .set(data)
+      .where(eq(documents.id, id))
+      .returning();
+    return document;
+  }
+
+  async deleteDocument(id: number): Promise<boolean> {
+    // First, delete any related extractions
+    await db
+      .delete(extractions)
+      .where(eq(extractions.documentId, id));
+    
+    // Then delete the document
+    const result = await db
+      .delete(documents)
+      .where(eq(documents.id, id))
+      .returning({ id: documents.id });
+    
+    return result.length > 0;
+  }
+
+  // Extraction operations
+  async getExtraction(id: number): Promise<Extraction | undefined> {
+    const [extraction] = await db.select().from(extractions).where(eq(extractions.id, id));
+    return extraction;
+  }
+
+  async getExtractionByDocumentId(documentId: number): Promise<Extraction | undefined> {
+    const [extraction] = await db
+      .select()
+      .from(extractions)
+      .where(eq(extractions.documentId, documentId));
+    return extraction;
+  }
+
+  async createExtraction(extraction: InsertExtraction): Promise<Extraction> {
+    // Ensure we have default values for optional fields
+    const extractionWithDefaults = {
+      ...extraction,
+      vendorName: extraction.vendorName || null,
+      invoiceNumber: extraction.invoiceNumber || null,
+      invoiceDate: extraction.invoiceDate || null,
+      dueDate: extraction.dueDate || null,
+      totalAmount: extraction.totalAmount || null,
+      taxAmount: extraction.taxAmount || null,
+      lineItems: extraction.lineItems || null,
+      handwrittenNotes: extraction.handwrittenNotes || null,
+      markdownOutput: extraction.markdownOutput || null,
+      jsonOutput: extraction.jsonOutput || null
+    };
+    
+    const [newExtraction] = await db
+      .insert(extractions)
+      .values(extractionWithDefaults)
+      .returning();
+      
+    return newExtraction;
+  }
+
+  async updateExtraction(id: number, data: Partial<Extraction>): Promise<Extraction | undefined> {
+    const [extraction] = await db
+      .update(extractions)
+      .set(data)
+      .where(eq(extractions.id, id))
+      .returning();
+    return extraction;
+  }
+}
+
+// Switch from MemStorage to DatabaseStorage
+export const storage = new DatabaseStorage();
