@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- Avoid having files over 200–300 lines of code. Refactor at that point.
+
