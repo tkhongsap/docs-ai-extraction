@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { CloudUpload, Folder, LoaderPinwheel, FileText, Pencil, Table } from "lucide-react";
+import { CloudUpload, Folder, LoaderPinwheel, FileText, Pencil, Table, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Document } from "@shared/schema";
 import DocumentCard from "@/components/document-card";
@@ -13,8 +13,8 @@ export default function Dashboard() {
     queryKey: ['/api/documents'],
   });
   
-  // Get documents for the recent documents section (max 3)
-  const recentDocuments = documents?.slice(0, 3);
+  // Get documents for the recent documents section (max 5)
+  const recentDocuments = documents?.slice(0, 5);
 
   const navigateToUpload = () => {
     navigate('/upload');
@@ -30,66 +30,100 @@ export default function Dashboard() {
 
   // Count documents by status
   const processingCount = documents?.filter(doc => doc.status === 'processing').length || 0;
+  const errorCount = documents?.filter(doc => doc.status === 'error').length || 0;
+  const completedCount = documents?.filter(doc => doc.status === 'completed').length || 0;
   const totalDocuments = documents?.length || 0;
+  
+  // Calculate success rate if we have processed documents
+  const successRate = totalDocuments > 0 
+    ? Math.round((completedCount / totalDocuments) * 100)
+    : 0;
 
   return (
     <section className="container mx-auto px-4 py-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-2">Dashboard</h1>
-        <p className="text-gray-600">Extract and process your document data with AI-powered OCR</p>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-primary text-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-xl mb-1">Upload Document</h3>
-              <p className="text-blue-100">Process a new document</p>
-            </div>
-            <CloudUpload className="h-8 w-8 text-blue-200" />
-          </div>
+      {/* Hero Section */}
+      <div className="bg-blue-50 rounded-lg p-8 mb-8">
+        <h1 className="text-3xl font-bold mb-3">OCR Document Extraction</h1>
+        <p className="text-gray-700 mb-6 text-lg">Quickly extract and review data from invoices, receipts, and more with AI-powered OCR technology.</p>
+        <div className="flex flex-wrap gap-3">
           <Button 
-            className="mt-4 bg-white text-primary hover:bg-blue-50"
+            size="lg"
             onClick={navigateToUpload}
+            className="bg-primary hover:bg-primary/90"
           >
-            Upload Now
+            <CloudUpload className="mr-2 h-5 w-5" />
+            Upload Document
+          </Button>
+          <Button 
+            size="lg"
+            variant="outline" 
+            onClick={navigateToDocuments}
+          >
+            <Folder className="mr-2 h-5 w-5" />
+            View Documents
           </Button>
         </div>
-        
+      </div>
+
+      {/* Summary Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-xl mb-1">{totalDocuments} Documents</h3>
-              <p className="text-gray-600">In your library</p>
+              <h3 className="font-bold text-xl mb-1">{totalDocuments}</h3>
+              <p className="text-gray-600">Total Documents</p>
             </div>
             <Folder className="h-8 w-8 text-gray-300" />
           </div>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={navigateToDocuments}
-          >
-            View All
-          </Button>
         </div>
         
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-xl mb-1">{processingCount} Processing</h3>
-              <p className="text-gray-600">Documents in progress</p>
+              <h3 className="font-bold text-xl mb-1">{completedCount}</h3>
+              <p className="text-gray-600">Processed</p>
             </div>
-            <LoaderPinwheel className="h-8 w-8 text-gray-300" />
+            <FileText className="h-8 w-8 text-green-300" />
           </div>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={navigateToProcessing}
-          >
-            Check Status
-          </Button>
         </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-xl mb-1">{processingCount}</h3>
+              <p className="text-gray-600">Processing</p>
+            </div>
+            <LoaderPinwheel className="h-8 w-8 text-yellow-300" />
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-xl mb-1">{errorCount}</h3>
+              <p className="text-gray-600">Errors</p>
+            </div>
+            <AlertCircle className="h-8 w-8 text-red-300" />
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Upload Button */}
+      <div className="bg-primary text-white rounded-lg shadow p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-xl mb-1">Upload Document</h3>
+            <p className="text-blue-100">Process a new document with our OCR technology</p>
+          </div>
+          <CloudUpload className="h-10 w-10 text-blue-200" />
+        </div>
+        <Button 
+          className="mt-4 bg-white text-primary hover:bg-blue-50"
+          size="lg"
+          onClick={navigateToUpload}
+        >
+          Upload Now
+        </Button>
       </div>
 
       {/* Feature Highlights */}

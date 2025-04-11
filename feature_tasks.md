@@ -31,9 +31,12 @@ A running list of tasks to guide development of the OCR Document Extraction App.
   - Create a clean, responsive layout with consistent navigation (header, sidebar, or top bar).  
   - Ensure WCAG 2.1 AA accessibility compliance (color contrast, keyboard navigation).
 
-- [ ] **Dashboard/Home**  
+- [x] **Dashboard/Home**  
   - Display recently uploaded documents and quick links (upload, documents list).  
-  - Show summary of processing stats (e.g., total documents, completed, in-progress).
+  - Show summary of processing stats (e.g., total documents, completed, in-progress, errors).
+  - Implement hero section with app description and prominent CTAs.
+  - Create feature cards highlighting key capabilities.
+  - Add a clear upload document CTA as specified in requirements.
 
 - [ ] **Upload Page**  
   - Implement drag-and-drop file upload area and fallback file input.  
