@@ -88,18 +88,44 @@ export async function processDocument(filePath: string): Promise<OCRResult> {
  */
 async function callOpenAIVisionAPI(base64File: string, contentType: string): Promise<any> {
   const prompt = `
+    You are an expert document analyzer specializing in OCR extraction.
+    
+    TASK:
     Extract all text from this document, including both printed and handwritten content.
     Identify the document type (invoice, receipt, or other).
-    For invoices and receipts, extract:
-    - Vendor name
-    - Invoice/receipt number
-    - Invoice date
-    - Due date (if present)
-    - Total amount
-    - Tax amount (if present)
-    - Line items with description, quantity, unit price, and amount
+    Pay special attention to document structure and layout.
     
-    For any handwritten notes, extract the text and provide a confidence score between 0 and 1.
+    EXTRACTION INSTRUCTIONS:
+    1. For invoices and receipts:
+       - Vendor name and complete contact information
+       - Invoice/receipt number (look for patterns like INV-####, #######, etc.)
+       - Invoice date (convert to YYYY-MM-DD format)
+       - Due date if present (convert to YYYY-MM-DD format)
+       - Total amount (numeric value only)
+       - Tax amount if present (numeric value only)
+       - Line items with detailed description, quantity, unit price, and amount
+       - Look for any special terms, payment instructions, or notes
+    
+    2. For handwritten notes:
+       - Extract all handwritten text
+       - Identify the context of the note (e.g., approval, comment, instruction)
+       - Provide a confidence score between 0 and 1 for each note
+       - If a note is partially illegible, extract what you can and mark uncertain parts
+    
+    3. For tables and structured data:
+       - Preserve the structure of tables
+       - For each line item, ensure all fields are correctly associated
+       - Handle multi-line descriptions by keeping them with the correct item
+    
+    4. For general content:
+       - Capture headers, footers, and page numbers
+       - Note any logos or branding elements
+       - Recognize stamps, signatures, or other approval marks
+    
+    CONFIDENCE SCORING:
+    - Provide an overall confidence score for the extraction
+    - For handwritten content, provide individual confidence scores
+    - For unclear or ambiguous text, provide lower confidence scores
     
     Format your response as a JSON object with the following structure:
     {
@@ -136,7 +162,7 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
         'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4-vision-preview",  // Using the vision-optimized model for better OCR
         messages: [
           {
             role: "user", 
@@ -145,28 +171,36 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
               { 
                 type: "image_url", 
                 image_url: { 
-                  url: `data:${contentType};base64,${base64File}` 
+                  url: `data:${contentType};base64,${base64File}`,
+                  detail: "high"  // Request high detail for better text recognition
                 } 
               }
             ]
           }
         ],
-        max_tokens: 1500,
+        max_tokens: 3000,  // Increased token limit for more detailed response
+        temperature: 0.3,  // Lower temperature for more consistent results
         response_format: { type: "json_object" }
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error("OpenAI API Error Response:", errorText);
       throw new Error(`OpenAI API Error: ${response.status} ${errorText}`);
     }
 
-    const responseData = await response.json();
+    const responseData = await response.json() as { choices: [{ message: { content: string } }] };
     
     // Extract the JSON content from the response
     const content = responseData.choices[0].message.content;
-    return JSON.parse(content);
-  } catch (error) {
+    try {
+      return JSON.parse(content);
+    } catch (parseError: any) {
+      console.error("Error parsing JSON response:", content);
+      throw new Error(`Failed to parse OpenAI response: ${parseError.message}`);
+    }
+  } catch (error: any) {
     console.error("Error calling OpenAI API:", error);
     throw new Error(`Failed to process document with OpenAI: ${error.message}`);
   }
@@ -179,26 +213,171 @@ async function callOpenAIVisionAPI(base64File: string, contentType: string): Pro
  * @returns Properly formatted extraction data
  */
 export function formatOCRResult(rawResult: any): OCRResult {
-  // Set default values for missing fields
+  // Ensure we have at least an empty object if rawResult is null or undefined
+  rawResult = rawResult || {};
+  
+  // Handle potential string values for numeric fields
+  let totalAmount = undefined;
+  if (rawResult.totalAmount !== undefined) {
+    if (typeof rawResult.totalAmount === 'number') {
+      totalAmount = rawResult.totalAmount;
+    } else if (typeof rawResult.totalAmount === 'string') {
+      // Try to parse the string, removing any currency symbols
+      const cleanNumber = rawResult.totalAmount.replace(/[$£€,]/g, '');
+      const parsedNumber = parseFloat(cleanNumber);
+      if (!isNaN(parsedNumber)) {
+        totalAmount = parsedNumber;
+      }
+    }
+  }
+  
+  let taxAmount = undefined;
+  if (rawResult.taxAmount !== undefined) {
+    if (typeof rawResult.taxAmount === 'number') {
+      taxAmount = rawResult.taxAmount;
+    } else if (typeof rawResult.taxAmount === 'string') {
+      // Try to parse the string, removing any currency symbols
+      const cleanNumber = rawResult.taxAmount.replace(/[$£€,]/g, '');
+      const parsedNumber = parseFloat(cleanNumber);
+      if (!isNaN(parsedNumber)) {
+        taxAmount = parsedNumber;
+      }
+    }
+  }
+  
+  // Format line items, handling various input formats
+  const lineItems = Array.isArray(rawResult.lineItems) 
+    ? rawResult.lineItems.map((rawItem: any) => {
+        // Ensure item is an object
+        const item: any = typeof rawItem === 'object' && rawItem !== null ? rawItem : {};
+        
+        // Handle quantity
+        let quantity = 1;
+        if (item.quantity !== undefined) {
+          if (typeof item.quantity === 'number') {
+            quantity = item.quantity;
+          } else if (typeof item.quantity === 'string') {
+            const parsedQuantity = parseFloat(item.quantity);
+            if (!isNaN(parsedQuantity)) {
+              quantity = parsedQuantity;
+            }
+          }
+        }
+        
+        // Handle unit price
+        let unitPrice = 0;
+        if (item.unitPrice !== undefined) {
+          if (typeof item.unitPrice === 'number') {
+            unitPrice = item.unitPrice;
+          } else if (typeof item.unitPrice === 'string') {
+            const cleanPrice = item.unitPrice.replace(/[$£€,]/g, '');
+            const parsedPrice = parseFloat(cleanPrice);
+            if (!isNaN(parsedPrice)) {
+              unitPrice = parsedPrice;
+            }
+          }
+        }
+        
+        // Handle amount
+        let amount = 0;
+        if (item.amount !== undefined) {
+          if (typeof item.amount === 'number') {
+            amount = item.amount;
+          } else if (typeof item.amount === 'string') {
+            const cleanAmount = item.amount.replace(/[$£€,]/g, '');
+            const parsedAmount = parseFloat(cleanAmount);
+            if (!isNaN(parsedAmount)) {
+              amount = parsedAmount;
+            }
+          }
+        } else if (quantity !== undefined && unitPrice !== undefined) {
+          // Calculate amount if not provided
+          amount = quantity * unitPrice;
+        }
+        
+        return {
+          description: item.description || 'Unknown item',
+          quantity: quantity,
+          unitPrice: unitPrice,
+          amount: amount
+        };
+      }) 
+    : [];
+  
+  // Format handwritten notes
+  const handwrittenNotes = Array.isArray(rawResult.handwrittenNotes) 
+    ? rawResult.handwrittenNotes.map((rawNote: any) => {
+        // Ensure note is an object
+        const note: any = typeof rawNote === 'object' && rawNote !== null ? rawNote : {};
+        
+        let confidence = 0.5;
+        if (note.confidence !== undefined) {
+          if (typeof note.confidence === 'number') {
+            confidence = Math.max(0, Math.min(1, note.confidence));
+          } else if (typeof note.confidence === 'string') {
+            const parsedConfidence = parseFloat(note.confidence);
+            if (!isNaN(parsedConfidence)) {
+              confidence = Math.max(0, Math.min(1, parsedConfidence));
+            }
+          }
+        }
+        
+        return {
+          text: note.text || '',
+          confidence: confidence
+        };
+      }) 
+    : [];
+  
+  // Format dates as YYYY-MM-DD strings
+  let invoiceDate = undefined;
+  if (rawResult.invoiceDate) {
+    try {
+      // Try to parse as ISO date
+      const date = new Date(rawResult.invoiceDate);
+      if (!isNaN(date.getTime())) {
+        invoiceDate = date.toISOString().split('T')[0];
+      } else {
+        // If not a valid date, use as is
+        invoiceDate = rawResult.invoiceDate;
+      }
+    } catch (e) {
+      // If date parsing fails, use as is
+      invoiceDate = rawResult.invoiceDate;
+    }
+  }
+  
+  let dueDate = undefined;
+  if (rawResult.dueDate) {
+    try {
+      // Try to parse as ISO date
+      const date = new Date(rawResult.dueDate);
+      if (!isNaN(date.getTime())) {
+        dueDate = date.toISOString().split('T')[0];
+      } else {
+        // If not a valid date, use as is
+        dueDate = rawResult.dueDate;
+      }
+    } catch (e) {
+      // If date parsing fails, use as is
+      dueDate = rawResult.dueDate;
+    }
+  }
+  
+  // Create the final result object with all fields properly formatted
   const result: OCRResult = {
     documentType: rawResult.documentType || 'other',
     vendorName: rawResult.vendorName || 'Unknown Vendor',
     invoiceNumber: rawResult.invoiceNumber || 'Unknown',
-    invoiceDate: rawResult.invoiceDate || undefined,
-    dueDate: rawResult.dueDate || undefined,
-    totalAmount: typeof rawResult.totalAmount === 'number' ? rawResult.totalAmount : undefined,
-    taxAmount: typeof rawResult.taxAmount === 'number' ? rawResult.taxAmount : undefined,
-    lineItems: Array.isArray(rawResult.lineItems) ? rawResult.lineItems.map(item => ({
-      description: item.description || 'Unknown item',
-      quantity: typeof item.quantity === 'number' ? item.quantity : 1,
-      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : 0,
-      amount: typeof item.amount === 'number' ? item.amount : 0
-    })) : [],
-    handwrittenNotes: Array.isArray(rawResult.handwrittenNotes) ? rawResult.handwrittenNotes.map(note => ({
-      text: note.text || '',
-      confidence: typeof note.confidence === 'number' ? Math.max(0, Math.min(1, note.confidence)) : 0.5
-    })) : [],
-    confidence: typeof rawResult.confidence === 'number' ? Math.max(0, Math.min(1, rawResult.confidence)) : 0.7
+    invoiceDate: invoiceDate,
+    dueDate: dueDate,
+    totalAmount: totalAmount,
+    taxAmount: taxAmount,
+    lineItems: lineItems,
+    handwrittenNotes: handwrittenNotes,
+    confidence: typeof rawResult.confidence === 'number' 
+      ? Math.max(0, Math.min(1, rawResult.confidence)) 
+      : 0.7
   };
   
   return result;
@@ -211,50 +390,140 @@ export function formatOCRResult(rawResult: any): OCRResult {
  * @returns Markdown-formatted text
  */
 export function generateMarkdownOutput(result: OCRResult): string {
-  let markdown = `# Document Extraction\n\n`;
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric'
+  });
+  const formattedTime = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
   
-  markdown += `## Document Info\n\n`;
-  markdown += `- **Type**: ${result.documentType}\n`;
+  let markdown = `# Document Extraction Report\n\n`;
+  markdown += `*Generated on ${formattedDate} at ${formattedTime}*\n\n`;
+  
+  // Document summary section
+  markdown += `## Document Summary\n\n`;
+  markdown += `- **Document Type**: ${result.documentType.charAt(0).toUpperCase() + result.documentType.slice(1)}\n`;
   markdown += `- **Vendor**: ${result.vendorName}\n`;
   markdown += `- **Invoice Number**: ${result.invoiceNumber}\n`;
   
   if (result.invoiceDate) {
-    markdown += `- **Invoice Date**: ${result.invoiceDate}\n`;
+    // Try to format the date nicely if possible
+    try {
+      const date = new Date(result.invoiceDate);
+      if (!isNaN(date.getTime())) {
+        markdown += `- **Invoice Date**: ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
+      } else {
+        markdown += `- **Invoice Date**: ${result.invoiceDate}\n`;
+      }
+    } catch (e) {
+      markdown += `- **Invoice Date**: ${result.invoiceDate}\n`;
+    }
   }
   
   if (result.dueDate) {
-    markdown += `- **Due Date**: ${result.dueDate}\n`;
+    // Try to format the date nicely if possible
+    try {
+      const date = new Date(result.dueDate);
+      if (!isNaN(date.getTime())) {
+        markdown += `- **Due Date**: ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\n`;
+      } else {
+        markdown += `- **Due Date**: ${result.dueDate}\n`;
+      }
+    } catch (e) {
+      markdown += `- **Due Date**: ${result.dueDate}\n`;
+    }
   }
+  
+  // Financial information section
+  markdown += `\n## Financial Information\n\n`;
   
   if (result.totalAmount !== undefined) {
     markdown += `- **Total Amount**: $${result.totalAmount.toFixed(2)}\n`;
+  } else {
+    markdown += `- **Total Amount**: Not specified\n`;
   }
   
   if (result.taxAmount !== undefined) {
     markdown += `- **Tax Amount**: $${result.taxAmount.toFixed(2)}\n`;
+    
+    // If we have both total and tax, calculate the subtotal
+    if (result.totalAmount !== undefined) {
+      const subtotal = result.totalAmount - result.taxAmount;
+      markdown += `- **Subtotal**: $${subtotal.toFixed(2)}\n`;
+    }
+  } else {
+    markdown += `- **Tax Amount**: Not specified\n`;
   }
   
+  // Line items section with improved table formatting
   if (result.lineItems && result.lineItems.length > 0) {
     markdown += `\n## Line Items\n\n`;
-    markdown += `| Description | Quantity | Unit Price | Amount |\n`;
-    markdown += `| ----------- | -------- | ---------- | ------ |\n`;
     
+    // Calculate column widths based on content length
+    let maxDescLen = "Description".length;
+    let maxQtyLen = "Quantity".length;
+    let maxPriceLen = "Unit Price".length;
+    let maxAmountLen = "Amount".length;
+    
+    result.lineItems.forEach(item => {
+      maxDescLen = Math.max(maxDescLen, item.description.length);
+      maxQtyLen = Math.max(maxQtyLen, item.quantity.toString().length);
+      maxPriceLen = Math.max(maxPriceLen, (`$${item.unitPrice.toFixed(2)}`).length);
+      maxAmountLen = Math.max(maxAmountLen, (`$${item.amount.toFixed(2)}`).length);
+    });
+    
+    // Add some padding
+    maxDescLen += 2;
+    maxQtyLen += 2;
+    maxPriceLen += 2;
+    maxAmountLen += 2;
+    
+    // Build the table header
+    markdown += `| ${"Description".padEnd(maxDescLen)} | ${"Quantity".padEnd(maxQtyLen)} | ${"Unit Price".padEnd(maxPriceLen)} | ${"Amount".padEnd(maxAmountLen)} |\n`;
+    markdown += `| ${"-".repeat(maxDescLen)} | ${"-".repeat(maxQtyLen)} | ${"-".repeat(maxPriceLen)} | ${"-".repeat(maxAmountLen)} |\n`;
+    
+    // Build the table rows
     for (const item of result.lineItems) {
-      markdown += `| ${item.description} | ${item.quantity} | $${item.unitPrice.toFixed(2)} | $${item.amount.toFixed(2)} |\n`;
+      markdown += `| ${item.description.padEnd(maxDescLen)} | ${item.quantity.toString().padEnd(maxQtyLen)} | $${item.unitPrice.toFixed(2).padEnd(maxPriceLen - 1)} | $${item.amount.toFixed(2).padEnd(maxAmountLen - 1)} |\n`;
+    }
+    
+    // Add a summary line if we have multiple items
+    if (result.lineItems.length > 1) {
+      const totalLineItemsAmount = result.lineItems.reduce((sum, item) => sum + item.amount, 0);
+      markdown += `| ${"**TOTAL**".padEnd(maxDescLen)} | ${" ".repeat(maxQtyLen)} | ${" ".repeat(maxPriceLen)} | ${"**$" + totalLineItemsAmount.toFixed(2) + "**"} |\n`;
     }
   }
   
+  // Handwritten notes section with confidence scores
   if (result.handwrittenNotes && result.handwrittenNotes.length > 0) {
     markdown += `\n## Handwritten Notes\n\n`;
     
     for (const note of result.handwrittenNotes) {
-      markdown += `- ${note.text} _(confidence: ${(note.confidence * 100).toFixed(0)}%)_\n`;
+      // Format the confidence as a percentage and add color indicators
+      const confidencePct = (note.confidence * 100).toFixed(0);
+      let confidenceIndicator = "";
+      
+      if (note.confidence >= 0.8) {
+        confidenceIndicator = "high";
+      } else if (note.confidence >= 0.5) {
+        confidenceIndicator = "medium";
+      } else {
+        confidenceIndicator = "low";
+      }
+      
+      markdown += `- "${note.text}" _(${confidenceIndicator} confidence: ${confidencePct}%)_\n`;
     }
   }
   
-  markdown += `\n## Metadata\n\n`;
+  // Metadata and extraction details
+  markdown += `\n## Extraction Details\n\n`;
   markdown += `- **Overall Confidence**: ${(result.confidence * 100).toFixed(0)}%\n`;
-  markdown += `- **Processed Date**: ${new Date().toISOString()}\n`;
+  markdown += `- **Processed Date**: ${formattedDate}\n`;
+  markdown += `- **Processed Time**: ${formattedTime}\n`;
   
   return markdown;
 }
@@ -266,21 +535,53 @@ export function generateMarkdownOutput(result: OCRResult): string {
  * @returns JSON-formatted string
  */
 export function generateJSONOutput(result: OCRResult): string {
+  // Calculate some additional derived values
+  let subtotal = undefined;
+  if (result.totalAmount !== undefined && result.taxAmount !== undefined) {
+    subtotal = result.totalAmount - result.taxAmount;
+  }
+  
+  // Calculate some aggregate metrics
+  const totalLineItemsValue = result.lineItems.reduce((sum, item) => sum + item.amount, 0);
+  const lineItemCount = result.lineItems.length;
+  const handwrittenNoteCount = result.handwrittenNotes.length;
+  
+  // Average confidence of handwritten notes
+  let avgHandwrittenConfidence = 0;
+  if (handwrittenNoteCount > 0) {
+    avgHandwrittenConfidence = result.handwrittenNotes.reduce((sum, note) => sum + note.confidence, 0) / handwrittenNoteCount;
+  }
+  
+  // Build the structured JSON object with all information
   const jsonObj = {
     documentInfo: {
-      type: result.documentType,
+      documentType: result.documentType,
       vendor: result.vendorName,
       invoiceNumber: result.invoiceNumber,
-      invoiceDate: result.invoiceDate,
-      dueDate: result.dueDate,
+      dates: {
+        invoiceDate: result.invoiceDate,
+        dueDate: result.dueDate
+      }
+    },
+    financialData: {
       totalAmount: result.totalAmount,
-      taxAmount: result.taxAmount
+      taxAmount: result.taxAmount,
+      subtotal: subtotal,
+      calculatedTotal: totalLineItemsValue,
+      discrepancy: result.totalAmount !== undefined ? (result.totalAmount - totalLineItemsValue) : undefined
     },
     lineItems: result.lineItems,
     handwrittenNotes: result.handwrittenNotes,
+    statistics: {
+      lineItemCount: lineItemCount,
+      handwrittenNoteCount: handwrittenNoteCount,
+      avgHandwrittenConfidence: avgHandwrittenConfidence
+    },
     metadata: {
       confidence: result.confidence,
-      processedDate: new Date().toISOString()
+      confidencePercentage: (result.confidence * 100).toFixed(1) + "%",
+      processedDate: new Date().toISOString(),
+      apiVersion: "1.0"
     }
   };
   
