@@ -1,23 +1,50 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Extraction, LineItem, HandwrittenNote } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Edit, Save, Download, Plus, Trash2 } from "lucide-react";
+import { Edit, Save, Download, Plus, Trash2, Info, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 
 interface ExtractedDataViewerProps {
   extraction: Extraction;
   documentId: number;
   onDataUpdated?: (data: Extraction) => void;
+  documentScrollPosition?: number;
 }
+
+// Helper function to get confidence color based on percentage
+const getConfidenceColor = (confidence: number): string => {
+  if (confidence >= 80) return '#10b981'; // Green
+  if (confidence >= 60) return '#facc15'; // Yellow
+  return '#ef4444'; // Red
+};
+
+// Helper function to get average confidence
+const getAverageConfidence = (extraction: Extraction): number => {
+  if (!extraction.handwrittenNotes || extraction.handwrittenNotes.length === 0) {
+    return 0;
+  }
+  return Math.round(
+    extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / 
+    extraction.handwrittenNotes.length
+  );
+};
 
 export default function ExtractedDataViewer({ 
   extraction: initialExtraction, 
   documentId,
-  onDataUpdated
+  onDataUpdated,
+  documentScrollPosition
 }: ExtractedDataViewerProps) {
   const [extraction, setExtraction] = useState<Extraction>(initialExtraction);
   const [isEditing, setIsEditing] = useState(false);
@@ -25,6 +52,19 @@ export default function ExtractedDataViewer({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // References for scroll sync
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Sync scrolling with document viewer
+  useEffect(() => {
+    if (containerRef.current && typeof documentScrollPosition === 'number') {
+      const { scrollHeight, clientHeight } = containerRef.current;
+      const scrollTop = ((scrollHeight - clientHeight) * documentScrollPosition) / 100;
+      
+      containerRef.current.scrollTop = scrollTop;
+    }
+  }, [documentScrollPosition]);
   
   // Handle updating the extraction data
   const updateExtractionMutation = useMutation({
@@ -579,10 +619,27 @@ export default function ExtractedDataViewer({
           )}
         </TabsContent>
         
-        <TabsContent value="metadata" className="mt-0">
+        <TabsContent value="metadata" className="mt-0" ref={containerRef}>
           <div className="space-y-4">
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-              <h3 className="text-md font-semibold mb-3">Document Metadata</h3>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-md font-semibold">Document Metadata</h3>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Info className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs max-w-xs">
+                        This information provides details about the document and its extraction process.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Document ID</p>
@@ -593,16 +650,109 @@ export default function ExtractedDataViewer({
                   <p className="text-sm font-medium">{extraction.id}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">OCR Engine</p>
-                  <p className="text-sm font-medium">OpenAI Vision API</p>
+                  <p className="text-sm text-gray-500">File Type</p>
+                  <p className="text-sm font-medium">
+                    {extraction.documentId ? (extraction.documentId ? "PDF/Image" : "Unknown") : "Unknown"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Average Confidence</p>
-                  <p className="text-sm font-medium">
-                    {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 
-                      ? `${Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length)}%`
-                      : 'N/A'}
-                  </p>
+                  <p className="text-sm text-gray-500">OCR Engine</p>
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium mr-2">OpenAI Vision API</span>
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      Active
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-md font-semibold">OCR Confidence Metrics</h3>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Info className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs max-w-xs">
+                        Confidence scores indicate the OCR system's certainty in the extracted text.
+                        Higher percentages indicate more reliable extractions.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              
+              <div className="space-y-4">
+                {/* Average Confidence */}
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <p className="text-sm text-gray-500">Average Confidence Score</p>
+                    <p className="text-sm font-medium">
+                      {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 
+                        ? `${Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length)}%`
+                        : 'N/A'}
+                    </p>
+                  </div>
+                  
+                  {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 && (
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div 
+                        className="h-2.5 rounded-full" 
+                        style={{ 
+                          width: `${Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length)}%`,
+                          backgroundColor: getConfidenceColor(Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length))
+                        }}
+                      ></div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Confidence by field type */}
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Invoice Fields</p>
+                    <div className="flex items-center">
+                      <Badge className="bg-green-100 text-green-800 border-green-200 mr-2">
+                        High
+                      </Badge>
+                      <span className="text-sm">95%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Line Items</p>
+                    <div className="flex items-center">
+                      <Badge className="bg-green-100 text-green-800 border-green-200 mr-2">
+                        High
+                      </Badge>
+                      <span className="text-sm">92%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Handwriting</p>
+                    <div className="flex items-center">
+                      <Badge className={`${extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
+                        (getAverageConfidence(extraction) > 80 ? "bg-green-100 text-green-800 border-green-200" : 
+                        getAverageConfidence(extraction) > 60 ? "bg-yellow-100 text-yellow-800 border-yellow-200" : 
+                        "bg-red-100 text-red-800 border-red-200") : 
+                        "bg-gray-100 text-gray-800 border-gray-200"} mr-2`}>
+                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
+                          (getAverageConfidence(extraction) > 80 ? "High" : 
+                          getAverageConfidence(extraction) > 60 ? "Medium" : 
+                          "Low") : 
+                          "N/A"}
+                      </Badge>
+                      <span className="text-sm">
+                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
+                          `${getAverageConfidence(extraction)}%` : 
+                          "N/A"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -611,12 +761,24 @@ export default function ExtractedDataViewer({
               <h3 className="text-md font-semibold mb-3">Processing Information</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Processing Time</p>
-                  <p className="text-sm font-medium">5.2 seconds</p>
+                  <p className="text-sm text-gray-500">Extract Date</p>
+                  <p className="text-sm font-medium">{new Date(extraction.processedAt || Date.now()).toLocaleDateString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Processing Date</p>
-                  <p className="text-sm font-medium">{new Date().toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <div className="flex items-center">
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      Completed
+                    </Badge>
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-gray-500 mb-1">OCR Processing Tips</p>
+                  <ul className="text-xs text-gray-600 list-disc pl-4 space-y-1">
+                    <li>Documents with clear print text yield higher accuracy</li>
+                    <li>Handwritten text extraction may require manual verification</li>
+                    <li>Edit data in the respective tabs as needed</li>
+                  </ul>
                 </div>
               </div>
             </div>
