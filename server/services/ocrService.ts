@@ -171,33 +171,74 @@ async function processPdfWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing PDF file with Mistral AI...');
 
-    // We need to upload the PDF to a cloud storage or create a temporary link
-    // For simplicity, let's create a temporary data URL
-    const fileContent = fs.readFileSync(filePath, {encoding: 'utf8'});
-    const base64File = fileContent.toString('base64');
-    const contentType = 'application/pdf';
-    const dataUrl = `data:${contentType};base64,${base64File}`;
+    // Convert PDF to images since Mistral OCR can process images but needs https URL for PDFs
+    // Create a unique subfolder for this operation
+    const jobId = uuidv4();
+    const jobDir = path.join(tempDir, jobId);
+    fs.mkdirSync(jobDir, { recursive: true });
 
-    console.log('Calling Mistral OCR API with PDF data...');
-
-    // Process the PDF with Mistral OCR
-    // Using document_url with a data URL
-    const ocrResponse = await mistralClient.ocr.process({
-      model: "mistral-ocr-latest",
-      document: {
-        type: "document_url",
-        documentUrl: dataUrl
-      },
-      includeImageBase64: false
-    });
-
-    console.log('PDF successfully processed by Mistral OCR');
-
-    // Extract the structured information from the OCR response
-    return parseMistralOCRResponse(ocrResponse);
+    // First, we'll convert the first page of the PDF to an image
+    try {
+      await convertPdfToImage(filePath, jobDir);
+      console.log('PDF converted to image(s) for OCR processing');
+      
+      // Process the first converted image
+      const convertedImages = fs.readdirSync(jobDir)
+        .filter(file => file.endsWith('.png') || file.endsWith('.jpg'))
+        .sort();
+      
+      if (convertedImages.length === 0) {
+        throw new Error('No images were generated from PDF conversion');
+      }
+      
+      // Use the first image for OCR
+      const imagePath = path.join(jobDir, convertedImages[0]);
+      console.log(`Using converted image for OCR: ${imagePath}`);
+      
+      // Process the image with Mistral OCR
+      const result = await processImageWithMistralAI(imagePath);
+      
+      // Clean up the temp directory
+      try {
+        fs.rmSync(jobDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        console.warn('Failed to clean up temporary files:', cleanupError);
+      }
+      
+      return result;
+    } catch (conversionError: any) {
+      console.error('Error converting PDF to image:', conversionError);
+      throw new Error(`Failed to process PDF: ${conversionError.message}`);
+    }
   } catch (error: any) {
     console.error('Error processing PDF with Mistral AI:', error);
     throw new Error(`Failed to process PDF with Mistral AI: ${error.message}`);
+  }
+}
+
+/**
+ * Convert a PDF file to image(s) for OCR processing
+ * 
+ * @param pdfPath Path to the PDF file
+ * @param outputDir Directory to save the converted images
+ * @returns Path to the first converted image
+ */
+async function convertPdfToImage(pdfPath: string, outputDir: string): Promise<void> {
+  // Use pdf-poppler to convert PDF to images
+  const popplerOptions = {
+    format: 'png',
+    out_dir: outputDir,
+    out_prefix: 'page',
+    page: null // Convert all pages
+  };
+  
+  try {
+    // Dynamically import pdf-poppler
+    const pdfPoppler = await import('pdf-poppler');
+    await pdfPoppler.convert(pdfPath, popplerOptions);
+  } catch (error: any) {
+    console.error('Error converting PDF to images:', error);
+    throw new Error(`Failed to convert PDF to images: ${error.message}`);
   }
 }
 
@@ -211,8 +252,8 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
   try {
     console.log('Processing image with Mistral AI OCR...');
 
-    // Read the image file
-    const fileContent = fs.readFileSync(filePath, {encoding: 'utf8'});
+    // Read the image file as binary data, not as utf8
+    const fileContent = fs.readFileSync(filePath);
     const base64File = fileContent.toString('base64');
 
     // Determine content type based on file extension
@@ -237,15 +278,16 @@ async function processImageWithMistralAI(filePath: string): Promise<any> {
         contentType = 'image/webp';
         break;
       default:
-        contentType = 'image/jpeg'; // Default content type
+        contentType = 'image/png'; // Default content type for converted PDFs
     }
 
-    // Create a data URL for the image
-    const dataUrl = `data:${contentType};base64,${base64File}`;
-
     console.log('Calling Mistral OCR API with image data...');
-
-    // Process with Mistral OCR
+    
+    // Process with Mistral OCR using image URL
+    // Since Mistral doesn't support base64 directly, we'll go back to using imageUrl
+    // but encode the image data properly
+    const dataUrl = `data:${contentType};base64,${base64File}`;
+    
     const ocrResponse = await mistralClient.ocr.process({
       model: "mistral-ocr-latest",
       document: {
