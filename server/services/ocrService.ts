@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { OpenAI } from 'openai';
 import axios from 'axios';
+import FormData from 'form-data';
 import { LineItem, HandwrittenNote } from '../../shared/schema';
 
 // Initialize OpenAI client 
@@ -11,7 +12,7 @@ const openai = new OpenAI({
 
 // Initialize LlamaParse API configuration
 const LLAMAPARSE_API_KEY = process.env.LLAMAPARSE_API_KEY;
-const LLAMAPARSE_API_URL = 'https://api.llamaindex.ai/v1/parsing/parse_file';
+const LLAMAPARSE_API_URL = 'https://api.llamaparse.ai/api/v1/parsing/parse_file';
 
 // Log API keys status (for debugging, redacted for security)
 console.log(`OPENAI_API_KEY ${process.env.OPENAI_API_KEY ? 'is set' : 'is not set'}`);
@@ -34,8 +35,12 @@ export async function parseDocumentWithLlamaParse(filePath: string): Promise<any
 
     // Create form data for multipart request
     const formData = new FormData();
-    const blob = new Blob([fileContent], { type: getMimeType(fileExtension) });
-    formData.append('file', blob, fileName);
+    
+    // In Node.js environment with form-data package
+    formData.append('file', fileContent, {
+      filename: fileName,
+      contentType: getMimeType(fileExtension),
+    });
 
     // Make request to LlamaParse API
     const response = await axios.post(
@@ -44,7 +49,7 @@ export async function parseDocumentWithLlamaParse(filePath: string): Promise<any
       {
         headers: {
           'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
-          'Content-Type': 'multipart/form-data',
+          ...formData.getHeaders() // Let form-data set the appropriate Content-Type with boundary
         }
       }
     );
@@ -52,6 +57,19 @@ export async function parseDocumentWithLlamaParse(filePath: string): Promise<any
     return response.data;
   } catch (error) {
     console.error('Error parsing document with LlamaParse:', error);
+    
+    // Enhanced error logging for axios errors
+    if (axios.isAxiosError(error)) {
+      console.error('LlamaParse API request failed:');
+      console.error('  URL:', error.config?.url);
+      console.error('  Status:', error.response?.status);
+      console.error('  Status Text:', error.response?.statusText);
+      console.error('  Response Data:', error.response?.data);
+      
+      // Throw a more descriptive error message
+      throw new Error(`LlamaParse API error: ${error.response?.status || 'unknown'} - ${error.response?.statusText || error.message}`);
+    }
+    
     throw error;
   }
 }
@@ -86,6 +104,21 @@ export async function processInvoiceWithOpenAI(llamaParseResult: any, documentId
     return formatExtractionResult(extractionResult, documentId);
   } catch (error) {
     console.error('Error processing invoice with OpenAI:', error);
+    
+    // Provide a more descriptive error message
+    if (error instanceof Error) {
+      // Check if it's an OpenAI API error
+      if ('status' in error && 'headers' in error) {
+        const openaiError = error as any;
+        console.error('OpenAI API error details:');
+        console.error('  Status:', openaiError.status);
+        console.error('  Type:', openaiError.type);
+        console.error('  Message:', openaiError.message);
+        
+        throw new Error(`OpenAI API error: ${openaiError.status || 'unknown'} - ${openaiError.message}`);
+      }
+    }
+    
     throw error;
   }
 }
@@ -236,6 +269,18 @@ export async function processDocument(filePath: string, documentId: number): Pro
     return extractionResult;
   } catch (error) {
     console.error('Error in document processing:', error);
+    
+    // Check if it's an error with a specific message from our error handlers
+    if (error instanceof Error) {
+      // If we have a specific error from LlamaParse or OpenAI, pass it through
+      if (error.message.includes('LlamaParse API error') || error.message.includes('OpenAI API error')) {
+        throw error;
+      }
+      
+      // Otherwise provide a general document processing error
+      throw new Error(`Document processing failed: ${error.message}`);
+    }
+    
     throw error;
   }
 }
