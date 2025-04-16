@@ -141,7 +141,7 @@ If a field is not present in the document, set it to null.`;
           role: "user", 
           content: [
             { type: "text", text: userPrompt },
-            { type: "image", image_url: { url: `data:${fileType};base64,${base64Content}` } }
+            { type: "image_url", image_url: { url: `data:${fileType};base64,${base64Content}` } }
           ]
         }
       ],
@@ -149,7 +149,7 @@ If a field is not present in the document, set it to null.`;
     });
     
     // Get the response text
-    const assistantMessage = response.choices[0].message.content;
+    const assistantMessage = response?.choices?.[0]?.message?.content || '';
     
     // Try to extract JSON from the response
     try {
