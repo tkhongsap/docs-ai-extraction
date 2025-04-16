@@ -79,7 +79,8 @@ export async function processInvoiceWithOpenAI(llamaParseResult: any, documentId
     });
 
     // Parse the OpenAI response
-    const extractionResult = JSON.parse(completion.choices[0].message.content);
+    const content = completion.choices[0].message.content || '{}';
+    const extractionResult = JSON.parse(content);
     
     // Format the extraction result for storage
     return formatExtractionResult(extractionResult, documentId);
@@ -154,7 +155,7 @@ function formatExtractionResult(extractionResult: any, documentId: number): any 
 }
 
 // Generate markdown output for the extracted data
-function generateMarkdownOutput(extraction: any, lineItems: LineItem[], handwrittenNotes: HandwrittenNote[]): string {
+export function generateMarkdownOutput(extraction: any, lineItems: LineItem[], handwrittenNotes: HandwrittenNote[]): string {
   let markdown = `# Invoice Details\n\n`;
 
   // Add basic invoice information
@@ -189,6 +190,24 @@ function generateMarkdownOutput(extraction: any, lineItems: LineItem[], handwrit
   }
 
   return markdown;
+}
+
+// Generate JSON output for the extracted data
+export function generateJSONOutput(extraction: any): string {
+  const jsonOutput = JSON.stringify({
+    documentInfo: {
+      vendor: extraction.vendorName,
+      invoiceNumber: extraction.invoiceNumber,
+      invoiceDate: extraction.invoiceDate,
+      dueDate: extraction.dueDate,
+      totalAmount: extraction.totalAmount,
+      taxAmount: extraction.taxAmount
+    },
+    lineItems: extraction.lineItems,
+    handwrittenNotes: extraction.handwrittenNotes
+  }, null, 2);
+  
+  return jsonOutput;
 }
 
 // Helper function to get MIME type from file extension

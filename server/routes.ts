@@ -146,8 +146,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
-      // Get OCR service from form data, default to 'mistral'
-      const ocrService = (req.body.ocrService as string) || 'mistral';
+      // Get OCR service from form data, default to 'llamaparse'
+      const ocrServiceName = (req.body.ocrService as string) || 'llamaparse';
 
       const documentData = {
         originalFilename: Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
@@ -155,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileType: req.file.mimetype,
         status: "uploaded",
         storagePath: req.file.path,
-        ocrService,
+        ocrService: ocrServiceName,
       };
 
       // Validate document data
@@ -196,12 +196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
-          // Process the document with OCR using the selected OCR service
-          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService || 'mistral');
-
-          // Generate markdown and JSON outputs
-          const markdownOutput = ocrService.generateMarkdownOutput(ocrResult);
-          const jsonOutput = ocrService.generateJSONOutput(ocrResult);
+          // Process the document with OCR using LlamaParse service
+          const ocrResult = await ocrService.processDocument(document.storagePath, document.id);
 
           // Create extraction record
           const extraction = await storage.createExtraction({
@@ -214,8 +210,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             taxAmount: ocrResult.taxAmount?.toString(),
             lineItems: JSON.parse(JSON.stringify(ocrResult.lineItems)),
             handwrittenNotes: JSON.parse(JSON.stringify(ocrResult.handwrittenNotes)),
-            markdownOutput,
-            jsonOutput
+            markdownOutput: ocrResult.markdownOutput,
+            jsonOutput: ocrResult.jsonOutput
           });
 
           // Update document to completed state

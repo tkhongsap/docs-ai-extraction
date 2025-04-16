@@ -178,7 +178,22 @@ export default function Upload() {
                 </SelectContent>
               </Select>
               <p className="mt-2 text-sm text-gray-500">
-                Different OCR services have varying capabilities for extracting text from documents.
+                {ocrService === 'llamaparse' ? (
+                  <>
+                    <strong>LlamaParse:</strong> Specialized in extracting structured data from invoices with high accuracy. 
+                    Perfect for capturing vendor details, line items, and payment information.
+                  </>
+                ) : ocrService === 'openai' ? (
+                  <>
+                    <strong>OpenAI Vision:</strong> Excellent at understanding complex layouts and mixed content.
+                    Great for documents with handwritten notes and annotations.
+                  </>
+                ) : (
+                  <>
+                    <strong>Mistral AI:</strong> General-purpose OCR with good balance of speed and accuracy.
+                    Suitable for standard document formats.
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -225,7 +240,7 @@ export default function Upload() {
 
       {/* Upload Tips */}
       <div className="bg-blue-50 rounded-lg p-5">
-        <h3 className="font-bold text-primary mb-3">Tips for Best Results</h3>
+        <h3 className="font-bold text-primary mb-3">Tips for Best Results with {ocrService === 'llamaparse' ? 'LlamaParse' : ocrService === 'openai' ? 'OpenAI' : 'Mistral'}</h3>
         <ul className="text-gray-700 space-y-2">
           <li className="flex items-start">
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
@@ -235,13 +250,27 @@ export default function Upload() {
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
             <span>Make sure text is clearly visible and not blurred</span>
           </li>
+          {ocrService === 'llamaparse' && (
+            <>
+              <li className="flex items-start">
+                <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
+                <span><strong>Invoice Processing:</strong> Ensure invoice headers, line items, and totals are clearly visible</span>
+              </li>
+              <li className="flex items-start">
+                <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
+                <span>Original digital invoices perform better than scanned copies</span>
+              </li>
+            </>
+          )}
+          {ocrService === 'openai' && (
+            <li className="flex items-start">
+              <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
+              <span>For handwritten notes, write clearly and avoid overlapping text</span>
+            </li>
+          )}
           <li className="flex items-start">
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
-            <span>For handwritten notes, write clearly and avoid overlapping text</span>
-          </li>
-          <li className="flex items-start">
-            <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
-            <span>For best results with invoices, ensure all edges are visible</span>
+            <span>For best results with invoices, ensure all edges and table borders are visible</span>
           </li>
         </ul>
       </div>
