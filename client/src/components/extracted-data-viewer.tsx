@@ -666,11 +666,24 @@ export default function ExtractedDataViewer({
                 <div>
                   <p className="text-sm text-gray-500">OCR Engine</p>
                   <div className="flex items-center">
-                    <span className="text-sm font-medium mr-2">Mistral AI OCR</span>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      Active
-                    </Badge>
+                    <span className="text-sm font-medium mr-2">
+                      {extraction.processingMetadata?.ocrEngine || "LlamaParse"}
+                    </span>
+                    {extraction.processingMetadata?.ocrEngine?.includes('fallback') ? (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                        Fallback
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        Primary
+                      </Badge>
+                    )}
                   </div>
+                  {extraction.processingMetadata?.processingParams?.reason && (
+                    <p className="text-xs text-gray-500 mt-1 italic">
+                      Fallback reason: {extraction.processingMetadata.processingParams.reason}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

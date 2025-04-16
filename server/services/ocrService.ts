@@ -183,8 +183,9 @@ export async function processDocument(filePath: string, service: string = 'llama
         };
         
         console.log("Successfully processed document with LlamaParse + OpenAI Vision for notes");
-      } catch (llamaparseError) {
+      } catch (error) {
         // LlamaParse failed - fall back to OpenAI Vision
+        const llamaparseError = error as Error;
         console.error("LlamaParse processing failed, falling back to OpenAI Vision:", llamaparseError);
         usedFallback = true;
         
@@ -339,7 +340,7 @@ export async function processDocument(filePath: string, service: string = 'llama
           processingParams: {
             model: 'gpt-4-vision-preview',
             fallback: true,
-            reason: llamaparseError.message
+            reason: llamaparseError?.message || 'LlamaParse processing failed'
           },
           documentClassification: 'Invoice/Document'
         };

@@ -188,6 +188,20 @@ export default function ProcessingItem({
         </span>
       </div>
       
+      {document.processingMetadata?.ocrEngine?.includes('fallback') && (
+        <div className="mt-2 bg-amber-50 p-2 rounded-md border border-amber-200 text-xs text-amber-800 flex items-start">
+          <AlertCircle className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+          <span>
+            LlamaParse connection failed. Successfully processed with OpenAI Vision fallback mechanism.
+            {document.processingMetadata?.processingParams?.reason && (
+              <span className="block mt-1 italic text-amber-700 text-[10px]">
+                Reason: {document.processingMetadata.processingParams.reason}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+      
       <div className="mt-3 flex justify-end space-x-2">
         {document.status === "completed" && onView && (
           <Button 
