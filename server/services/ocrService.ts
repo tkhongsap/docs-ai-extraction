@@ -82,14 +82,24 @@ async function processMistralOCR(filePath: string, isPdf: boolean): Promise<OCRR
       throw new Error('Mistral API key is not configured. Please set the MISTRAL_API_KEY environment variable.');
     }
     
-    // Read file as base64
+    // Read the actual file content
+    console.log(`Reading file from path: ${filePath}`);
     const fileContent = fs.readFileSync(filePath);
-    const base64Content = fileContent.toString('base64');
-    const fileType = isPdf ? 'application/pdf' : 'image/jpeg';
+    console.log(`File size: ${fileContent.length} bytes`);
+    
+    // For testing/debugging, let's look at the file type
+    const fileExt = path.extname(filePath).toLowerCase();
+    console.log(`File extension: ${fileExt}`);
+    
+    // Use node-fetch to directly call the Mistral API
+    const fetch = require('node-fetch');
+    const url = 'https://api.mistral.ai/v1/chat/completions';
     
     // Create the prompt for Mistral AI
     const systemPrompt = `You are an expert OCR system specialized in invoice and document analysis. 
-Extract the following information from the provided document:
+Your task is to analyze the provided document image and extract structured information.
+
+Extract the following fields:
 1. Vendor name
 2. Invoice number
 3. Invoice date (in YYYY-MM-DD format)
@@ -99,7 +109,10 @@ Extract the following information from the provided document:
 7. Line items (description, quantity, unit price, amount)
 8. Any handwritten notes
 
-Return the information in JSON format with the following structure:
+BE CAREFUL: Always extract the exact information from the document. Do not make up or guess any values that aren't clearly visible in the document.
+If information is not present, return null for that field. Do not use placeholder data.
+
+Return the information in JSON format with this exact structure:
 {
   "vendorName": string or null,
   "invoiceNumber": string or null,
@@ -124,50 +137,69 @@ Return the information in JSON format with the following structure:
 }
 
 For handwritten notes, assign a confidence value between 0 and 1, where 1 means highest confidence.
-Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, not strings.
-If a field is not present in the document, set it to null.`;
+Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, not strings.`;
 
-    const userPrompt = `Process this ${isPdf ? 'PDF' : 'image'} document and extract invoice information according to the required format.`;
+    const fileType = isPdf ? 'application/pdf' : 'image/jpeg';
+    const base64Content = fileContent.toString('base64');
     
-    // Extract document context using Mistral AI
-    console.log('Using Mistral AI to analyze document...');
-    
-    // Call Mistral API with the document as a base64 attachment
-    const response = await mistralClient.chat.complete({
+    // Construct the API request
+    const requestBody = {
       model: "mistral-large-latest",
       messages: [
-        { 
-          role: "system", 
-          content: systemPrompt 
+        {
+          role: "system",
+          content: systemPrompt
         },
-        { 
-          role: "user", 
-          content: userPrompt + "\n\n[Image attached]" // Simplified approach for now
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `I need to extract information from this ${isPdf ? 'PDF' : 'image'} document.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${fileType};base64,${base64Content}`
+              }
+            }
+          ]
         }
       ],
-      temperature: 0.0 // Low temperature for more deterministic results
+      temperature: 0
+    };
+    
+    console.log('Sending request to Mistral API...');
+    
+    // Make the API request
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${mistralApiKey}`
+      },
+      body: JSON.stringify(requestBody)
     });
     
-    // Get the response text, ensuring it's a string
-    let assistantMessage = '';
-    if (response && response.choices && response.choices.length > 0) {
-      const messageContent = response.choices[0].message.content;
-      if (typeof messageContent === 'string') {
-        assistantMessage = messageContent;
-      } else if (Array.isArray(messageContent)) {
-        // If content is an array of chunks, concatenate text chunks
-        assistantMessage = messageContent
-          .filter(chunk => chunk.type === 'text')
-          .map(chunk => chunk.text)
-          .join('');
-      }
+    // Parse the response
+    const responseData = await response.json();
+    
+    // Check for API errors
+    if (!response.ok) {
+      console.error('Mistral API Error:', responseData);
+      throw new Error(`Mistral API Error: ${responseData.error?.message || JSON.stringify(responseData)}`);
     }
     
+    // Extract the assistant's message
+    if (!responseData.choices || responseData.choices.length === 0) {
+      throw new Error('No response from Mistral API');
+    }
+    
+    const assistantMessage = responseData.choices[0].message.content;
     console.log('Received response from Mistral:', assistantMessage);
     
-    // Try to extract JSON from the response
     try {
-      // Use a regex to extract JSON object if it's wrapped in markdown code blocks or other text
+      // Use a regex to extract JSON object if it's wrapped in markdown code blocks
       const jsonMatch = assistantMessage.match(/```(?:json)?([\s\S]*?)```/) || 
                         assistantMessage.match(/{[\s\S]*?}/);
       
