@@ -242,6 +242,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               errorMessage = "API authentication error. Please contact support to verify your account.";
             } else if (error.message.includes("Network")) {
               errorMessage = "Network connection error. Please check your internet connection and try again.";
+            } else if (error.message.includes("hang up") || error.message.includes("socket") || error.message.includes("Connection closed")) {
+              errorMessage = "The connection to the OCR service was lost. The service may be experiencing high load. Please try again later.";
             } else {
               // Use the original error message if none of the specific cases match
               errorMessage = error.message;

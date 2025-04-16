@@ -44,6 +44,10 @@ export default function ProcessingItem({
           return "File size limit exceeded — The document is too large. Please reduce the file size.";
         } else if (document.errorMessage.includes("API key")) {
           return "API authentication error — Please contact support to verify your account.";
+        } else if (document.errorMessage.includes("hang up") || document.errorMessage.includes("socket") || document.errorMessage.includes("Connection closed")) {
+          return "Server connection lost — The service may be experiencing high load. Please try again later.";
+        } else if (document.errorMessage.includes("Network")) {
+          return "Network error — Please check your internet connection and try again.";
         } else {
           return document.errorMessage;
         }

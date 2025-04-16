@@ -171,6 +171,8 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
       // Check for common errors
       if (error.code === 'ENOTFOUND') {
         throw new Error('LlamaParse API error: Network connection error - unable to resolve host. Please check your internet connection.');
+      } else if (error.code === 'ECONNRESET' || error.message?.includes('hang up') || error.message?.includes('socket')) {
+        throw new Error('LlamaParse API error: Connection closed by server - The service may be experiencing high load. Please try again later.');
       } else if (error.response?.status === 401) {
         throw new Error('LlamaParse API error: Authentication failed - Invalid API key');
       } else if (error.response?.status === 404) {
