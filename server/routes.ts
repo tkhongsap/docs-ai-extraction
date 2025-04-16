@@ -197,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setTimeout(async () => {
         try {
           // Process the document with OCR using LlamaParse service
-          const ocrResult = await ocrService.processDocument(document.storagePath, document.id);
+          const ocrResult = await ocrService.processDocument(document.storagePath);
 
           // Create extraction record
           const extraction = await storage.createExtraction({
