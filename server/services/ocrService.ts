@@ -104,7 +104,7 @@ function parseHandwrittenNotes(visionResponse: string): HandwrittenNote[] {
   }
 }
 
-async function processDocument(filePath: string, service: string = 'llamaparse'): Promise<OCRResult> {
+export async function processDocument(filePath: string, service: string = 'llamaparse'): Promise<OCRResult> {
   console.log(`Processing document with file extension: ${filePath.split('.').pop()} using ${service}`);
 
   if (service !== 'llamaparse') {

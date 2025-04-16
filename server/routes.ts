@@ -8,8 +8,7 @@ import { insertDocumentSchema, insertExtractionSchema, LineItem, HandwrittenNote
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 // Import the OCR service
-import * as ocrService from "./services/ocrService";
-// import { processDocument } from './services/llamaparseService';
+import ocrService from "./services/ocrService";
 import { DatabaseStorage } from './storage';
 import llamaparseService from './services/llamaparseService';
 
@@ -205,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setTimeout(async () => {
         try {
           // Process the document with OCR using LlamaParse service
-          const ocrResult = await ocrService.processDocument(document.storagePath);
+          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService || 'llamaparse');
 
           // Create extraction record
           const extraction = await storage.createExtraction({

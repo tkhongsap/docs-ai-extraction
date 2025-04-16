@@ -39,6 +39,9 @@ export interface LlamaParseResult {
   paymentTerms?: string;
   paymentMethod?: string;
   
+  // Additional information from Thai/English extraction
+  additionalInfo?: string;
+  
   // Structured data
   lineItems: LineItem[];
   handwrittenNotes?: HandwrittenNote[];
@@ -78,6 +81,23 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
     throw new Error('LlamaParse API key is missing. Please add LLAMAPARSE_API_KEY to environment variables.');
   }
 
+  // Custom extraction query for Thai and English invoices/POs
+  const customExtractionQuery = `
+    Extract the following information from this document (which may be an invoice or purchase order, in Thai or English):
+    1. company_name
+    2. address
+    3. date
+    4. invoice_numbers_or_po_numbers
+    5. items (a list of objects, each with name, quantity, and price). Extract every item listed in the document, and do not omit any items unless they are crossed out or struck through.
+       - If an item is crossed out but replaced by another value (e.g., a handwritten correction), only display the replacement value in the output (not the crossed-out one).
+       - If you are unsure about any item, indicate so.
+    6. total_amount
+    7. other (any additional relevant information not covered above)
+
+    This document may be entirely or partially in Thai or English, and it may contain handwritten text. Carefully extract the information, ignoring any crossed-out or struck-through items.
+    If any item was crossed out but replaced with a handwritten correction, use the new corrected value and exclude the crossed-out version.
+  `;
+
   // Process with LlamaParse API
   let llamaparseResponse;
   try {
@@ -101,6 +121,9 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
     form.append('output_detail_level', 'high');
     form.append('include_positions', 'true');
     form.append('include_confidence', 'true');
+    
+    // Add our custom extraction query
+    form.append('custom_query', customExtractionQuery);
     
     // Try each endpoint in sequence
     let lastError = null;
@@ -164,6 +187,43 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
   // Process LlamaParse response
   const llamaData = llamaparseResponse.data;
   
+  // Map the custom extraction fields to our standard fields
+  // This handles the Thai/English extraction results
+  const vendorName = llamaData.company_name || llamaData.vendor_name;
+  const vendorAddress = llamaData.address || llamaData.vendor_address;
+  const invoiceNumber = llamaData.invoice_numbers_or_po_numbers || llamaData.invoice_number;
+  const invoiceDate = llamaData.date ? new Date(llamaData.date) : 
+                    (llamaData.invoice_date ? new Date(llamaData.invoice_date) : undefined);
+  
+  // Process line items (check both standard and custom formats)
+  const rawLineItems = llamaData.items || llamaData.line_items || [];
+  const lineItems = rawLineItems.map((item: any) => {
+    // Handle different item structures
+    if (item.name && item.quantity !== undefined && item.price !== undefined) {
+      // Format from custom extraction
+      return {
+        description: item.name || 'Unknown Item',
+        quantity: parseFloat(item.quantity) || 1,
+        unitPrice: parseFloat(item.price) || 0,
+        amount: (parseFloat(item.quantity) || 1) * (parseFloat(item.price) || 0),
+        confidence: item.confidence || 75
+      };
+    } else {
+      // Standard format (from default LlamaParse processing)
+      return {
+        description: item.description || 'Unknown Item',
+        quantity: parseFloat(item.quantity) || 1,
+        unitPrice: parseFloat(item.unit_price) || 0,
+        amount: parseFloat(item.amount) || 0,
+        itemCode: item.item_code || item.sku || undefined,
+        category: item.category || undefined,
+        taxRate: item.tax_rate ? parseFloat(item.tax_rate) : undefined,
+        discount: item.discount ? parseFloat(item.discount) : undefined,
+        confidence: item.confidence || 75
+      };
+    }
+  });
+  
   // Calculate confidence scores
   const confidenceScores = computeConfidenceScores(llamaData);
   
@@ -178,40 +238,32 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
     processingParams: {
       model: 'LlamaParse Invoice Parser',
       confidence_threshold: 0.5,
+      customQuery: true,
     },
     documentClassification: llamaData.document_type || 'Invoice'
   };
 
-  // Create processed line items with enhanced data
-  const lineItems = llamaData.line_items?.map((item: any) => ({
-    description: item.description || 'Unknown Item',
-    quantity: parseFloat(item.quantity) || 1,
-    unitPrice: parseFloat(item.unit_price) || 0,
-    amount: parseFloat(item.amount) || 0,
-    itemCode: item.item_code || item.sku || undefined,
-    category: item.category || undefined,
-    taxRate: item.tax_rate ? parseFloat(item.tax_rate) : undefined,
-    discount: item.discount ? parseFloat(item.discount) : undefined,
-    confidence: item.confidence || 75
-  })) || [];
-
+  // Create final result for extraction
   const result: LlamaParseResult = {
     // Basic invoice information
-    vendorName: llamaData.vendor_name,
-    vendorAddress: llamaData.vendor_address,
+    vendorName: vendorName,
+    vendorAddress: vendorAddress,
     vendorContact: llamaData.vendor_contact_info || llamaData.vendor_phone || llamaData.vendor_email,
     clientName: llamaData.client_name || llamaData.customer_name,
     clientAddress: llamaData.client_address || llamaData.customer_address,
-    invoiceNumber: llamaData.invoice_number,
-    invoiceDate: llamaData.invoice_date ? new Date(llamaData.invoice_date) : undefined,
+    invoiceNumber: invoiceNumber,
+    invoiceDate: invoiceDate,
     dueDate: llamaData.due_date ? new Date(llamaData.due_date) : undefined,
     totalAmount: parseFloat(llamaData.total_amount) || undefined,
     subtotalAmount: parseFloat(llamaData.subtotal_amount) || parseFloat(llamaData.subtotal) || undefined,
     taxAmount: parseFloat(llamaData.tax_amount) || undefined,
     discountAmount: parseFloat(llamaData.discount_amount) || parseFloat(llamaData.discount) || undefined,
-    currency: llamaData.currency || 'USD',
+    currency: llamaData.currency || 'THB', // Default to THB for Thai documents
     paymentTerms: llamaData.payment_terms,
     paymentMethod: llamaData.payment_method,
+    
+    // Additional info from the custom extraction
+    additionalInfo: llamaData.other,
     
     // Structured data
     lineItems,
@@ -244,7 +296,7 @@ function generateMarkdownOutput(extraction: any): string {
   
   // Invoice Details
   markdown += '## Invoice Details\n\n';
-  if (extraction.invoiceNumber) markdown += `**Invoice Number:** ${extraction.invoiceNumber}\n`;
+  if (extraction.invoiceNumber) markdown += `**Invoice Number/PO Number:** ${extraction.invoiceNumber}\n`;
   if (extraction.invoiceDate) {
     const date = extraction.invoiceDate instanceof Date 
       ? extraction.invoiceDate.toISOString().split('T')[0]
@@ -291,13 +343,19 @@ function generateMarkdownOutput(extraction: any): string {
   // Line Items
   if (extraction.lineItems && extraction.lineItems.length > 0) {
     markdown += '## Line Items\n\n';
-    markdown += '| Description | Item Code | Quantity | Unit Price | Tax Rate | Discount | Amount |\n';
-    markdown += '|-------------|-----------|----------|------------|----------|----------|--------|\n';
+    markdown += '| Description | Item Code | Quantity | Unit Price | Amount |\n';
+    markdown += '|-------------|-----------|----------|------------|--------|\n';
     
     for (const item of extraction.lineItems) {
-      markdown += `| ${item.description} | ${item.itemCode || 'N/A'} | ${item.quantity} | ${item.unitPrice.toFixed(2)} | ${item.taxRate?.toFixed(2) || 'N/A'} | ${item.discount?.toFixed(2) || 'N/A'} | ${item.amount.toFixed(2)} |\n`;
+      markdown += `| ${item.description} | ${item.itemCode || 'N/A'} | ${item.quantity} | ${item.unitPrice.toFixed(2)} | ${item.amount.toFixed(2)} |\n`;
     }
     markdown += '\n';
+  }
+  
+  // Additional Information (for Thai/English extraction)
+  if (extraction.additionalInfo) {
+    markdown += '## Additional Information\n\n';
+    markdown += `${extraction.additionalInfo}\n\n`;
   }
   
   // Handwritten Notes
@@ -333,6 +391,10 @@ function generateMarkdownOutput(extraction: any): string {
     if (extraction.processingMetadata.documentClassification) {
       markdown += `**Document Classification:** ${extraction.processingMetadata.documentClassification}\n`;
     }
+    
+    if (extraction.processingMetadata.customQuery) {
+      markdown += `**Custom Extraction:** Yes (Thai/English)\n`;
+    }
   }
   
   return markdown;
@@ -349,12 +411,12 @@ function generateCSVOutput(extraction: any): string {
   
   // Add header information
   csv += 'Field,Value\n';
-  if (extraction.vendorName) csv += `Vendor Name,${extraction.vendorName}\n`;
+  if (extraction.vendorName) csv += `Vendor Name/Company,${extraction.vendorName}\n`;
   if (extraction.vendorAddress) csv += `Vendor Address,${extraction.vendorAddress}\n`;
   if (extraction.vendorContact) csv += `Vendor Contact,${extraction.vendorContact}\n`;
   if (extraction.clientName) csv += `Client Name,${extraction.clientName}\n`;
   if (extraction.clientAddress) csv += `Client Address,${extraction.clientAddress}\n`;
-  if (extraction.invoiceNumber) csv += `Invoice Number,${extraction.invoiceNumber}\n`;
+  if (extraction.invoiceNumber) csv += `Invoice/PO Number,${extraction.invoiceNumber}\n`;
   
   if (extraction.invoiceDate) {
     const date = extraction.invoiceDate instanceof Date 
@@ -376,23 +438,39 @@ function generateCSVOutput(extraction: any): string {
   if (extraction.discountAmount) csv += `Discount,${extraction.discountAmount}\n`;
   if (extraction.totalAmount) csv += `Total Amount,${extraction.totalAmount}\n`;
   
+  // Additional info for Thai/English
+  if (extraction.additionalInfo) csv += `Additional Info,"${extraction.additionalInfo.replace(/"/g, '""')}"\n`;
+  
   csv += '\n';
   
   // Add line items
   if (extraction.lineItems && extraction.lineItems.length > 0) {
     csv += 'Line Items\n';
-    csv += 'Description,Item Code,Quantity,Unit Price,Tax Rate,Discount,Amount\n';
+    csv += 'Description,Item Code,Quantity,Unit Price,Amount\n';
     
     for (const item of extraction.lineItems) {
       const description = item.description ? `"${item.description.replace(/"/g, '""')}"` : '';
       const itemCode = item.itemCode || 'N/A';
       const quantity = item.quantity;
       const unitPrice = item.unitPrice.toFixed(2);
-      const taxRate = item.taxRate ? item.taxRate.toFixed(2) : 'N/A';
-      const discount = item.discount ? item.discount.toFixed(2) : 'N/A';
       const amount = item.amount.toFixed(2);
       
-      csv += `${description},${itemCode},${quantity},${unitPrice},${taxRate},${discount},${amount}\n`;
+      csv += `${description},${itemCode},${quantity},${unitPrice},${amount}\n`;
+    }
+    
+    csv += '\n';
+  }
+  
+  // Add handwritten notes
+  if (extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0) {
+    csv += 'Handwritten Notes\n';
+    csv += 'Text,Confidence\n';
+    
+    for (const note of extraction.handwrittenNotes) {
+      const text = note.text ? `"${note.text.replace(/"/g, '""')}"` : '';
+      const confidence = note.confidence || 0;
+      
+      csv += `${text},${confidence}\n`;
     }
     
     csv += '\n';
