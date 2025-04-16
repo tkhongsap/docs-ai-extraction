@@ -227,27 +227,40 @@ export async function processDocument(filePath: string, service: string = 'llama
         `;
         
         console.log("Processing document with OpenAI Vision fallback...");
-        const visionResponse = await openaiClient.chat.completions.create({
-          model: "gpt-4o",  // Updated to use the latest OpenAI vision model
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: fullExtractionPrompt
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${getMimeType(fileExtension)};base64,${base64Image}`
+        
+        // PDF files require special handling with OpenAI Vision
+        let visionResponse;
+        
+        if (fileExtension.toLowerCase() === 'pdf') {
+          console.log("PDF detected. Converting first page to image before sending to OpenAI Vision...");
+          
+          // We need to convert PDF to images first - add PDF to image conversion here
+          // For now we'll just throw an error since PDF conversion isn't implemented yet
+          throw new Error("Cannot process PDF files with OpenAI Vision fallback. Please use a supported image format like PNG or JPG. LlamaParse is required for PDF processing.");
+        } else {
+          // Process image files directly
+          visionResponse = await openaiClient.chat.completions.create({
+            model: "gpt-4o-mini",  // Updated to use the mini version for cost efficiency
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: fullExtractionPrompt
+                  },
+                  {
+                    type: "image_url",
+                    image_url: {
+                      url: `data:${getMimeType(fileExtension)};base64,${base64Image}`
+                    }
                   }
-                }
-              ]
-            }
-          ],
-          max_tokens: 2000
-        });
+                ]
+              }
+            ],
+            max_tokens: 2000
+          });
+        }
         
         const extractionText = visionResponse.choices[0].message.content || '';
         console.log("OpenAI Vision extraction completed, parsing structured data...");
@@ -338,7 +351,7 @@ export async function processDocument(filePath: string, service: string = 'llama
           processingTime: Date.now() - Date.now(), // Just a placeholder
           processingTimestamp: new Date().toISOString(),
           processingParams: {
-            model: 'gpt-4o',  // Update to the new model
+            model: 'gpt-4o-mini',  // Update to the mini version
             fallback: true,
             reason: llamaparseError?.message || 'LlamaParse processing failed'
           },

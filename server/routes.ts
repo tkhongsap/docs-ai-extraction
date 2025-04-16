@@ -203,8 +203,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
-          // Process the document with OCR using LlamaParse service
-          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService || 'llamaparse');
+          // Check file extension to determine processing method
+          const fileExtension = path.extname(document.storagePath).substring(1).toLowerCase();
+          
+          // Check if file type is supported
+          const supportedImageFormats = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'tiff', 'tif', 'bmp'];
+          const supportedDocFormats = ['pdf', 'doc', 'docx'];
+          
+          if (!supportedImageFormats.includes(fileExtension) && !supportedDocFormats.includes(fileExtension)) {
+            throw new Error(`Unsupported file format: ${fileExtension}. Only images and PDF documents are supported.`);
+          }
+          
+          // For PDF files, ensure we use LlamaParse only (no OpenAI Vision fallback)
+          const useService = fileExtension === 'pdf' ? 'llamaparse' : (document.ocrService || 'llamaparse');
+          
+          // Process the document with OCR
+          const ocrResult = await ocrService.processDocument(document.storagePath, useService);
 
           // Create extraction record
           const extraction = await storage.createExtraction({
