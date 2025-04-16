@@ -2,11 +2,22 @@ import fs from 'fs';
 import path from 'path';
 import { LineItem, HandwrittenNote } from '@shared/schema';
 import { Mistral } from '@mistralai/mistralai';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
+// Promisify exec for async/await usage
+const execAsync = promisify(exec);
 
 // OCR service API keys from environment variables
 const mistralApiKey = process.env.MISTRAL_API_KEY || '';
 const openaiApiKey = process.env.OPENAI_API_KEY || '';
 const llamaParseApiKey = process.env.LLAMAPARSE_API_KEY || '';
+
+// Directory for temporary files
+const tempDir = path.join(process.cwd(), 'temp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
 
 // Initialize Mistral client
 const mistralClient = new Mistral({ apiKey: mistralApiKey });
@@ -39,20 +50,61 @@ export async function processDocument(filePath: string, ocrService: string = 'mi
   }
 }
 
+// Helper function to convert PDF to image
+async function convertPdfToImage(pdfPath: string): Promise<string> {
+  console.log('Converting PDF to image...');
+  const randomId = Math.random().toString(36).substring(2, 15);
+  const outputImagePath = path.join(tempDir, `${randomId}_page_1.png`);
+  
+  try {
+    // Use pdftoppm from poppler to convert first page of PDF to PNG
+    // -f 1 -l 1: process only the first page
+    // -r 300: resolution 300 DPI
+    // -png: output format
+    await execAsync(`pdftoppm -f 1 -l 1 -r 300 -png "${pdfPath}" "${path.join(tempDir, randomId)}_page"`);
+    
+    if (fs.existsSync(outputImagePath)) {
+      console.log(`Successfully converted PDF to image: ${outputImagePath}`);
+      return outputImagePath;
+    } else {
+      throw new Error('Failed to convert PDF to image');
+    }
+  } catch (error) {
+    console.error('Error converting PDF to image:', error);
+    throw new Error(`Failed to convert PDF to image: ${error.message}`);
+  }
+}
+
 // Process PDF documents
 async function processPdfDocument(filePath: string, ocrService: string): Promise<OCRResult> {
   console.log(`Processing PDF document using ${ocrService} OCR...`);
 
-  switch (ocrService) {
-    case 'mistral':
-      return await processMistralOCR(filePath, true);
-    case 'openai':
-      return await processOpenAIOCR(filePath, true);
-    case 'llamaparse':
-      return await processLlamaParseOCR(filePath, true);
-    default:
-      // Default to Mistral if service not specified or invalid
-      return await processMistralOCR(filePath, true);
+  try {
+    // For Mistral and OpenAI, first convert PDF to image
+    if (ocrService === 'mistral' || ocrService === 'openai') {
+      const imagePath = await convertPdfToImage(filePath);
+      console.log(`Using converted image for OCR: ${imagePath}`);
+      
+      switch (ocrService) {
+        case 'mistral':
+          return await processMistralOCR(imagePath, false);
+        case 'openai':
+          return await processOpenAIOCR(imagePath, false);
+      }
+    }
+    
+    // For LlamaParse or any other service, use the original PDF
+    switch (ocrService) {
+      case 'llamaparse':
+        return await processLlamaParseOCR(filePath, true);
+      default:
+        // Fall back to Mistral with image conversion
+        const imagePath = await convertPdfToImage(filePath);
+        return await processMistralOCR(imagePath, false);
+    }
+  } catch (error) {
+    console.error('Error in PDF processing:', error);
+    throw error;
   }
 }
 
@@ -139,8 +191,43 @@ Return the information in JSON format with this exact structure:
 For handwritten notes, assign a confidence value between 0 and 1, where 1 means highest confidence.
 Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, not strings.`;
 
-    const fileType = isPdf ? 'application/pdf' : 'image/jpeg';
+    // Determine the correct MIME type based on file extension
+    let mimeType;
+    if (isPdf) {
+      mimeType = 'application/pdf';
+    } else {
+      // Set proper image MIME type based on file extension
+      const fileExt = path.extname(filePath).toLowerCase();
+      switch (fileExt) {
+        case '.jpg':
+        case '.jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case '.png':
+          mimeType = 'image/png';
+          break;
+        case '.tiff':
+        case '.tif':
+          mimeType = 'image/tiff';
+          break;
+        case '.bmp':
+          mimeType = 'image/bmp';
+          break;
+        case '.gif':
+          mimeType = 'image/gif';
+          break;
+        default:
+          mimeType = 'image/jpeg'; // Default to JPEG if unknown
+      }
+    }
+    
+    console.log(`Using MIME type: ${mimeType} for file with extension: ${fileExt}`);
+    
     const base64Content = fileContent.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64Content}`;
+    
+    // For logging, show a small portion of the base64 string to verify format
+    console.log(`Data URL starts with: ${dataUrl.substring(0, 50)}...`);
     
     // Construct the API request
     const requestBody = {
@@ -160,7 +247,7 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
             {
               type: "image_url",
               image_url: {
-                url: `data:${fileType};base64,${base64Content}`
+                url: dataUrl
               }
             }
           ]
