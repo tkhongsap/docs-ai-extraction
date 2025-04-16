@@ -145,6 +145,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
+      
+      // Get OCR service from form data, default to 'mistral'
+      const ocrService = (req.body.ocrService as string) || 'mistral';
 
       const documentData = {
         originalFilename: Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
@@ -152,6 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileType: req.file.mimetype,
         status: "uploaded",
         storagePath: req.file.path,
+        ocrService,
       };
 
       // Validate document data
@@ -192,8 +196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
-          // Process the document with OCR
-          const ocrResult = await ocrService.processDocument(document.storagePath);
+          // Process the document with OCR using the selected OCR service
+          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService);
 
           // Generate markdown and JSON outputs
           const markdownOutput = ocrService.generateMarkdownOutput(ocrResult);
