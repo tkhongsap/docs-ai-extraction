@@ -91,8 +91,8 @@ async function processMistralOCR(filePath: string, isPdf: boolean): Promise<OCRR
     const fileExt = path.extname(filePath).toLowerCase();
     console.log(`File extension: ${fileExt}`);
     
-    // Use node-fetch to directly call the Mistral API
-    const fetch = require('node-fetch');
+    // Use fetch to directly call the Mistral API
+    // Node.js has fetch built-in now, so we don't need to import it
     const url = 'https://api.mistral.ai/v1/chat/completions';
     
     // Create the prompt for Mistral AI
