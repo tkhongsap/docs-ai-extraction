@@ -9,7 +9,7 @@ const openaiApiKey = process.env.OPENAI_API_KEY || '';
 const llamaParseApiKey = process.env.LLAMAPARSE_API_KEY || '';
 
 // Initialize Mistral client
-const mistralClient = new Mistral(mistralApiKey);
+const mistralClient = new Mistral({ apiKey: mistralApiKey });
 
 interface OCRResult {
   vendorName: string | null;
@@ -133,7 +133,7 @@ If a field is not present in the document, set it to null.`;
     console.log('Using Mistral AI to analyze document...');
     
     // Call Mistral API with the document as a base64 attachment
-    const response = await mistralClient.chat({
+    const response = await mistralClient.chat.complete({
       model: "mistral-large-latest",
       messages: [
         { role: "system", content: systemPrompt },
