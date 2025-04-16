@@ -229,11 +229,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Document ${id} processed successfully`);
         } catch (error: any) {
           console.error(`Error processing document ${id}:`, error);
+          
+          // Create a more user-friendly error message
+          let errorMessage = "Unknown error during processing";
+          
+          if (error.message) {
+            if (error.message.includes("timeout")) {
+              errorMessage = "The document processing timed out. This may happen with large or complex files. Try a smaller document or try again later.";
+            } else if (error.message.includes("exceeded")) {
+              errorMessage = "The document exceeds the maximum size limit. Please try a smaller document or reduce the file size.";
+            } else if (error.message.includes("API key")) {
+              errorMessage = "API authentication error. Please contact support to verify your account.";
+            } else if (error.message.includes("Network")) {
+              errorMessage = "Network connection error. Please check your internet connection and try again.";
+            } else {
+              // Use the original error message if none of the specific cases match
+              errorMessage = error.message;
+            }
+          }
 
           // Update document to error state
           await storage.updateDocument(id, {
             status: "error",
-            errorMessage: error.message || "Unknown error during processing"
+            errorMessage: errorMessage
           });
         }
       }, 100); // Small delay to not block response
