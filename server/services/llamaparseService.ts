@@ -136,6 +136,16 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
       
       // Add our custom extraction query
       form.append('custom_query', customExtractionQuery);
+
+      // Enable OpenAI LLM integration
+      form.append('use_vendor_multimodal_model', 'true');
+      form.append('vendor_multimodal_model_name', 'openai-gpt-4o');
+      
+      // Use the same OpenAI API key from environment variables
+      const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+      if (OPENAI_API_KEY) {
+        form.append('vendor_multimodal_model_api_key', OPENAI_API_KEY);
+      }
       
       // Try each endpoint with its own retry mechanism
       let endpointSuccess = false;
@@ -311,13 +321,15 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
 
   // Create processing metadata
   const processingMetadata: ProcessingMetadata = {
-    ocrEngine: 'LlamaParse',
+    ocrEngine: 'LlamaParse with OpenAI GPT-4o',
     processingTime,
     processingTimestamp: new Date().toISOString(),
     processingParams: {
-      model: 'LlamaParse Invoice Parser',
+      model: 'LlamaParse Invoice Parser with OpenAI GPT-4o',
       confidence_threshold: 0.5,
       customQuery: true,
+      useOpenAIMultimodal: true,
+      multimodalModel: 'openai-gpt-4o'
     },
     documentClassification: llamaData.document_type || 'Invoice'
   };

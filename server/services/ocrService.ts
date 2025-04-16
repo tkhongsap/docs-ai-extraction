@@ -228,7 +228,7 @@ export async function processDocument(filePath: string, service: string = 'llama
         
         console.log("Processing document with OpenAI Vision fallback...");
         const visionResponse = await openaiClient.chat.completions.create({
-          model: "gpt-4-vision-preview",
+          model: "gpt-4o",  // Updated to use the latest OpenAI vision model
           messages: [
             {
               role: "user",
@@ -338,7 +338,7 @@ export async function processDocument(filePath: string, service: string = 'llama
           processingTime: Date.now() - Date.now(), // Just a placeholder
           processingTimestamp: new Date().toISOString(),
           processingParams: {
-            model: 'gpt-4-vision-preview',
+            model: 'gpt-4o',  // Update to the new model
             fallback: true,
             reason: llamaparseError?.message || 'LlamaParse processing failed'
           },
