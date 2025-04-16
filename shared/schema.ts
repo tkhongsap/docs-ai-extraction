@@ -13,6 +13,7 @@ export const documents = pgTable("documents", {
   storagePath: text("storage_path").notNull(),
   errorMessage: text("error_message"),
   ocrService: text("ocr_service", { enum: ["mistral", "openai", "llamaparse"] }).default("mistral"),
+  processingMetadata: json("processing_metadata"),
 });
 
 export const insertDocumentSchema = createInsertSchema(documents).omit({ 

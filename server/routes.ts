@@ -221,9 +221,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jsonOutput: ocrResult.jsonOutput
           });
 
-          // Update document to completed state
+          // Update document to completed state with processing metadata
           await storage.updateDocument(id, {
             status: "completed",
+            processingMetadata: ocrResult.processingMetadata
           });
 
           console.log(`Document ${id} processed successfully`);
@@ -250,10 +251,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          // Update document to error state
+          // Update document to error state with processing metadata
           await storage.updateDocument(id, {
             status: "error",
-            errorMessage: errorMessage
+            errorMessage: errorMessage,
+            processingMetadata: {
+              ocrEngine: document.ocrService || 'llamaparse',
+              processingTime: 0,
+              processingTimestamp: new Date().toISOString(),
+              processingParams: {
+                error: errorMessage,
+                attemptedFallback: error.message?.includes('fallback') || false
+              },
+              documentClassification: 'Error'
+            }
           });
         }
       }, 100); // Small delay to not block response

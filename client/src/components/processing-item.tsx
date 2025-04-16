@@ -1,4 +1,4 @@
-import { Document } from "@shared/schema";
+import { Document, ProcessingMetadata } from "@shared/schema";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, XCircle, Eye, AlertCircle } from "lucide-react";
