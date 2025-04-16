@@ -100,91 +100,163 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
 
   // Process with LlamaParse API
   let llamaparseResponse;
-  try {
-    // Try multiple possible API endpoints since the correct one might have changed
-    const possibleEndpoints = [
-      'https://api.llamaindex.ai/v1/parsing/parse_file',
-      'https://api.llamaindex.ai/api/parse',
-      'https://api.llamaparse.ai/api/v1/parse',
-      'https://api-inference.huggingface.co/models/llama/parse'
-    ];
+  
+  // Set up retry mechanism
+  const MAX_RETRIES = 3;  // Maximum number of retry attempts
+  const MAX_ENDPOINT_RETRIES = 1; // Maximum retries per endpoint
+  
+  // Try multiple possible API endpoints since the correct one might have changed
+  const possibleEndpoints = [
+    'https://api.llamaindex.ai/v1/parsing/parse_file',
+    'https://api.llamaindex.ai/api/parse',
+    'https://api.llamaparse.ai/api/v1/parse',
+    'https://api-inference.huggingface.co/models/llama/parse'
+  ];
+  
+  let globalLastError = null;
+  let globalRetryCount = 0;
+  
+  // Main loop for global retries
+  while (globalRetryCount < MAX_RETRIES) {
+    console.log(`Global retry attempt ${globalRetryCount + 1} of ${MAX_RETRIES}`);
     
-    // Create form data for upload
-    const form = new FormData();
-    form.append('file', fileBuffer, {
-      filename: fileName,
-      contentType: getMimeType(fileExtension)
-    });
-    
-    // Add parameters to optimize for invoice processing
-    form.append('parsing_mode', 'invoice');
-    form.append('output_detail_level', 'high');
-    form.append('include_positions', 'true');
-    form.append('include_confidence', 'true');
-    
-    // Add our custom extraction query
-    form.append('custom_query', customExtractionQuery);
-    
-    // Try each endpoint in sequence
-    let lastError = null;
-    for (const endpoint of possibleEndpoints) {
-      try {
-        console.log(`Attempting request to LlamaParse API at ${endpoint}`);
+    try {
+      // Create a new form data for each retry attempt
+      const form = new FormData();
+      form.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: getMimeType(fileExtension)
+      });
+      
+      // Add parameters to optimize for invoice processing
+      form.append('parsing_mode', 'invoice');
+      form.append('output_detail_level', 'high');
+      form.append('include_positions', 'true');
+      form.append('include_confidence', 'true');
+      
+      // Add our custom extraction query
+      form.append('custom_query', customExtractionQuery);
+      
+      // Try each endpoint with its own retry mechanism
+      let endpointSuccess = false;
+      for (const endpoint of possibleEndpoints) {
+        let endpointRetryCount = 0;
         
-        // Set up the request with timeout and proper headers
-        llamaparseResponse = await axios.post(endpoint, form, {
-          headers: {
-            'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
-            ...form.getHeaders(), // This is important to set the correct Content-Type with boundary
-          },
-          timeout: 120000, // Increase timeout to 120 seconds for large files
-          maxContentLength: 50 * 1024 * 1024, // Increase to 50MB for larger files
-          maxBodyLength: 50 * 1024 * 1024, // Also increase maxBodyLength
-        });
+        // Retry loop for current endpoint
+        while (endpointRetryCount < MAX_ENDPOINT_RETRIES) {
+          try {
+            console.log(`Attempting request to LlamaParse API at ${endpoint} (endpoint retry ${endpointRetryCount + 1}/${MAX_ENDPOINT_RETRIES}, global retry ${globalRetryCount + 1}/${MAX_RETRIES})`);
+            
+            // Set up the request with increased timeout and limits
+            llamaparseResponse = await axios.post(endpoint, form, {
+              headers: {
+                'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
+                ...form.getHeaders(), // This is important to set the correct Content-Type with boundary
+              },
+              timeout: 180000, // Increase timeout to 3 minutes for large files
+              maxContentLength: 50 * 1024 * 1024, // Increase to 50MB for larger files
+              maxBodyLength: 50 * 1024 * 1024, // Also increase maxBodyLength
+            });
+            
+            console.log(`LlamaParse API request was successful on ${endpoint}`);
+            endpointSuccess = true;
+            break; // Exit endpoint retry loop if successful
+          } catch (err: any) {
+            const error = err as any;
+            console.error(`Failed on ${endpoint} (endpoint retry ${endpointRetryCount + 1}/${MAX_ENDPOINT_RETRIES}):`, error.message || 'Unknown error');
+            
+            // Check if this error is worth retrying
+            const shouldRetryEndpoint = 
+              error.code === 'ECONNRESET' || 
+              error.code === 'ETIMEDOUT' || 
+              error.message?.includes('hang up') || 
+              error.message?.includes('socket') ||
+              error.message?.includes('timeout') ||
+              (error.response?.status >= 500 && error.response?.status < 600);
+            
+            globalLastError = error;
+            
+            if (shouldRetryEndpoint && endpointRetryCount < MAX_ENDPOINT_RETRIES - 1) {
+              // Implement exponential backoff for retries
+              endpointRetryCount++;
+              const backoffTime = Math.pow(2, endpointRetryCount) * 1000; // 2s, 4s, etc.
+              console.log(`Will retry endpoint in ${backoffTime/1000} seconds...`);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+            } else {
+              // Move to the next endpoint
+              console.log(`Moving to next endpoint after ${endpointRetryCount + 1} failed attempts on ${endpoint}`);
+              break;
+            }
+          }
+        }
         
-        console.log('LlamaParse API request was successful');
-        break; // If successful, exit the loop
-      } catch (err: any) {
-        console.error(`Failed to connect to ${endpoint}:`, err.message || 'Unknown error');
-        lastError = err;
-        
-        // Continue to the next endpoint if this one failed
-        continue;
+        // If we got a successful response, exit the endpoint loop
+        if (endpointSuccess) {
+          break;
+        }
+      }
+      
+      // If any endpoint succeeded, exit the global retry loop
+      if (endpointSuccess) {
+        console.log(`Successfully processed document after ${globalRetryCount + 1} global retries`);
+        break;
+      } else {
+        // No endpoint succeeded, try again globally if we still have retries
+        if (globalRetryCount < MAX_RETRIES - 1) {
+          globalRetryCount++;
+          const globalBackoffTime = Math.pow(2, globalRetryCount) * 2000; // 4s, 8s, 16s
+          console.log(`All endpoints failed. Global retry ${globalRetryCount}/${MAX_RETRIES} in ${globalBackoffTime/1000} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, globalBackoffTime));
+        } else {
+          // We're out of global retries
+          throw globalLastError || new Error('All LlamaParse API endpoints failed after multiple attempts');
+        }
+      }
+    } catch (error: any) {
+      // This catch block handles any errors not caught in the internal loops
+      globalLastError = error;
+      
+      if (globalRetryCount < MAX_RETRIES - 1) {
+        globalRetryCount++;
+        const globalBackoffTime = Math.pow(2, globalRetryCount) * 2000;
+        console.log(`Error during processing. Global retry ${globalRetryCount}/${MAX_RETRIES} in ${globalBackoffTime/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, globalBackoffTime));
+      } else {
+        // We're out of global retries, forward error to outer catch block
+        throw error;
       }
     }
+  }
+  
+  // If we still don't have a response after all retries
+  if (!llamaparseResponse) {
+    console.error('LlamaParse API error after all retry attempts:', globalLastError);
     
-    // If we've tried all endpoints and none worked, throw the last error
-    if (!llamaparseResponse) {
-      throw lastError || new Error('All LlamaParse API endpoints failed');
-    }
-  } catch (error: any) {
-    console.error('LlamaParse API error:', error);
-    
-    // Enhanced error logging
-    if (axios.isAxiosError(error)) {
-      console.error('LlamaParse API request failed:');
-      console.error('  URL:', error.config?.url);
-      console.error('  Status:', error.response?.status);
-      console.error('  Status Text:', error.response?.statusText);
-      console.error('  Response Data:', error.response?.data);
+    // Enhanced error logging and handling
+    if (axios.isAxiosError(globalLastError)) {
+      console.error('LlamaParse API request failed after multiple retries:');
+      console.error('  URL:', globalLastError.config?.url);
+      console.error('  Status:', globalLastError.response?.status);
+      console.error('  Status Text:', globalLastError.response?.statusText);
+      console.error('  Response Data:', globalLastError.response?.data);
       
       // Check for common errors
-      if (error.code === 'ENOTFOUND') {
+      if (globalLastError.code === 'ENOTFOUND') {
         throw new Error('LlamaParse API error: Network connection error - unable to resolve host. Please check your internet connection.');
-      } else if (error.code === 'ECONNRESET' || error.message?.includes('hang up') || error.message?.includes('socket')) {
-        throw new Error('LlamaParse API error: Connection closed by server - The service may be experiencing high load. Please try again later.');
-      } else if (error.response?.status === 401) {
+      } else if (globalLastError.code === 'ECONNRESET' || globalLastError.message?.includes('hang up') || globalLastError.message?.includes('socket')) {
+        throw new Error(`LlamaParse API error: Connection closed by server - The service may be experiencing high load. Please try again later. (${MAX_RETRIES} retries attempted)`);
+      } else if (globalLastError.response?.status === 401) {
         throw new Error('LlamaParse API error: Authentication failed - Invalid API key');
-      } else if (error.response?.status === 404) {
+      } else if (globalLastError.response?.status === 404) {
         throw new Error('LlamaParse API error: API endpoint not found - Please contact support');
-      } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
-        throw new Error('LlamaParse API error: Request timed out - The document may be too large or complex to process. Please try a smaller document or try again later.');
-      } else if (error.message?.includes('exceeded')) {
+      } else if (globalLastError.code === 'ETIMEDOUT' || globalLastError.message?.includes('timeout')) {
+        throw new Error(`LlamaParse API error: Request timed out after ${MAX_RETRIES} attempts - The document may be too large or complex to process. Please try a smaller document or try again later.`);
+      } else if (globalLastError.message?.includes('exceeded')) {
         throw new Error('LlamaParse API error: File size limit exceeded - The document is too large. Please try a smaller document or reduce the file size.');
       }
     }
     
-    throw new Error(`LlamaParse API error: ${error.message}`);
+    throw new Error(`LlamaParse API error after ${MAX_RETRIES} attempts: ${globalLastError?.message || 'Unknown error'}`);
   }
 
   // End processing timestamp
