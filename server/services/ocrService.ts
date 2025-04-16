@@ -74,18 +74,52 @@ async function processDocument(filePath: string, service: string = 'llamaparse')
 
   let llamaparseResponse;
   try {
-    // Using direct API endpoint with the correct URL
-    const LLAMAPARSE_ENDPOINT = 'https://api.llamaindex.ai/v1/parsing/parse_file';
+    // Try multiple possible API endpoints since the correct one might have changed
+    const possibleEndpoints = [
+      'https://api.llamaindex.ai/v1/parsing/parse_file',
+      'https://api.llamaindex.ai/api/parse',
+      'https://api.llamaparse.ai/api/v1/parse',
+      'https://api-inference.huggingface.co/models/llama/parse'
+    ];
     
-    console.log(`Making request to LlamaParse API at ${LLAMAPARSE_ENDPOINT}`);
-    llamaparseResponse = await axios.post(LLAMAPARSE_ENDPOINT, formData, {
-      headers: {
-        'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
-        ...formData.getHeaders() // This is important to set the correct Content-Type with boundary
-      }
+    // Use node-fetch for more reliable file uploads
+    const form = new FormData();
+    form.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: getMimeType(fileExtension)
     });
     
-    console.log('LlamaParse API request was successful');
+    let lastError = null;
+    for (const endpoint of possibleEndpoints) {
+      try {
+        console.log(`Attempting request to LlamaParse API at ${endpoint}`);
+        
+        // Set up the request with timeout and proper headers
+        llamaparseResponse = await axios.post(endpoint, form, {
+          headers: {
+            'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
+            ...form.getHeaders(), // This is important to set the correct Content-Type with boundary
+          },
+          timeout: 30000, // 30 second timeout
+          maxContentLength: 20 * 1024 * 1024, // 20MB max for larger files
+        });
+        
+        console.log('LlamaParse API request was successful');
+        break; // If successful, exit the loop
+      } catch (err: any) {
+        console.error(`Failed to connect to ${endpoint}:`, err.message || 'Unknown error');
+        lastError = err;
+        
+        // Continue to the next endpoint if this one failed
+        continue;
+      }
+    }
+    
+    // If we've tried all endpoints and none worked, throw the last error
+    if (!llamaparseResponse) {
+      console.error('All LlamaParse API endpoints failed');
+      throw lastError || new Error('All LlamaParse API endpoints failed');
+    }
   } catch (error: any) {
     console.error('LlamaParse API error:', error);
     
