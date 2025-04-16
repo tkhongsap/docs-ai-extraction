@@ -111,28 +111,46 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
   };
 
   return (
-    <div className={`bg-white rounded-lg shadow-sm p-4 flex flex-col ${fullscreen ? 'fixed inset-0 z-50' : ''}`}>
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="text-lg font-bold">Original Document</h2>
-        <div className="flex space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleFullscreen}
-            title={fullscreen ? "Exit full screen" : "Full screen"}
-          >
-            {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleResetView}
-            title="Reset view"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+    <div className={`flex flex-col ${fullscreen ? 'fixed inset-0 z-50 bg-white p-4' : ''}`}>
+      {fullscreen && (
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-bold">Document Viewer - {document.originalFilename}</h2>
+          <div className="flex space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleFullscreen}
+              title="Exit full screen"
+            >
+              <Minimize className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
+      
+      {/* Only show controls if not embedded in review page with its own header */}
+      {!fullscreen && (
+        <div className="flex justify-end items-center mb-2">
+          <div className="flex space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleFullscreen}
+              title="Full screen"
+            >
+              <Maximize className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetView}
+              title="Reset view"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       
       {/* Document Controls */}
       <div className="flex flex-col space-y-2 mb-2">

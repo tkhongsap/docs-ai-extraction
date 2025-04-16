@@ -213,6 +213,36 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return extraction;
   }
+
+  // Get extraction version history
+  async getExtractionVersions(documentId: number): Promise<any[]> {
+    try {
+      // In this implementation, we'll just return a simple history
+      // In a real implementation, this would fetch from a history/audit table
+      const extraction = await this.getExtractionByDocumentId(documentId);
+      
+      if (!extraction) {
+        return [];
+      }
+      
+      // Return a single version entry (current version only)
+      return [{
+        id: 1,
+        extractionId: extraction.id,
+        version: extraction.version || 1,
+        extraction: {
+          vendorName: extraction.vendorName,
+          invoiceNumber: extraction.invoiceNumber,
+          totalAmount: extraction.totalAmount,
+        },
+        changedFields: [],
+        timestamp: extraction.lastUpdated || new Date(),
+      }];
+    } catch (error) {
+      console.error("Error getting extraction versions:", error);
+      return [];
+    }
+  }
 }
 
 // Switch from MemStorage to DatabaseStorage

@@ -1,6 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, RefreshCw, Check, Copy, Download, Eye } from "lucide-react";
+import { ArrowLeft, RefreshCw, Check, Copy, Download, Eye, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Document, Extraction } from "@shared/schema";
 import DocumentPreview from "@/components/document-preview";
@@ -268,11 +268,34 @@ export default function Review() {
       {/* Main Content: Document and Data View */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Original Document */}
-        <div className={`${isMobile ? 'order-2' : 'order-1'}`}>
-          <DocumentPreview 
-            document={document} 
-            onScroll={(position) => setDocumentScrollPosition(position)}
-          />
+        <div className={`${isMobile ? 'order-2' : 'order-1'} bg-white rounded-lg shadow-sm p-4`}>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold">Original Document</h2>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.open(`/api/documents/${id}/file`, "_blank")}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                View Full Size
+              </Button>
+            </div>
+          </div>
+          <div className="border border-gray-200 rounded-md overflow-hidden">
+            <DocumentPreview 
+              document={document} 
+              onScroll={(position) => setDocumentScrollPosition(position)}
+            />
+          </div>
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-md">
+            <div className="flex">
+              <Info className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0" />
+              <p className="text-sm text-blue-800">
+                Scroll through the document to view all pages. The extracted data panel will synchronize with your scrolling position.
+              </p>
+            </div>
+          </div>
         </div>
         
         {/* Extracted Data */}
@@ -287,17 +310,29 @@ export default function Review() {
           ) : (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-lg font-bold mb-4">Extracted Data</h2>
-              <div className="bg-gray-50 p-8 text-center rounded-md">
-                <p className="text-gray-500">No extraction data available for this document.</p>
+              <div className="bg-gray-50 p-8 text-center rounded-md border border-gray-200">
+                <div className="text-gray-400 mb-3">
+                  <RefreshCw className="h-8 w-8 mx-auto" />
+                </div>
+                <p className="text-gray-600 mb-2">No extraction data available for this document.</p>
+                <p className="text-sm text-gray-500 mb-4">Use the button below to process this document and extract invoice data.</p>
                 <Button 
-                  variant="outline" 
+                  variant="default"
                   size="sm" 
-                  className="mt-4"
+                  className="mt-2"
                   onClick={() => reprocessMutation.mutate()}
                   disabled={reprocessMutation.isPending}
                 >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Process Document
+                  {reprocessMutation.isPending ? (
+                    <span className="flex items-center">
+                      <span className="animate-spin mr-2">⭘</span> Processing...
+                    </span>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Process Document
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

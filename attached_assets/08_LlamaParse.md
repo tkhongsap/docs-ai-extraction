@@ -33,6 +33,35 @@ LlamaParse is an advanced OCR service specialized in document parsing and data e
 ## Integration
 LlamaParse provides a straightforward REST API with comprehensive documentation. Integration requires minimal code and supports webhook callbacks for asynchronous processing of larger documents.
 
+### Review Page Integration
+LlamaParse's extraction results can be seamlessly integrated into the application's Review Page with the following features:
+
+#### Data Display Structure
+- **Invoice Details Tab**: Display all extracted header information including vendor name, invoice number, dates, and amount totals
+- **Line Items Tab**: Present extracted line item data in a structured table with columns for description, quantity, unit price, and total amount
+- **Handwritten Notes Tab**: Show detected handwritten annotations with confidence scores
+- **Metadata Tab**: Display document processing information, confidence scores, and extraction statistics
+
+#### Confidence Scores
+- Include confidence scores for each extracted field to help users identify which data points might need manual verification
+- Use visual indicators (color coding) to highlight high, medium, and low confidence extractions
+- Calculate and display average confidence by data category (invoice fields, line items, handwritten notes)
+
+#### Editing Capabilities
+- Enable inline editing of all extracted data fields for corrections
+- Support adding, modifying, and removing line items
+- Allow adjustment of confidence scores for handwritten notes
+- Implement validation for numeric fields (amounts, quantities) and date formats
+
+#### Synchronization with Document View
+- Implement synchronized scrolling between the original document view and extracted data panels
+- Highlight corresponding areas in the document when reviewing specific data fields
+
+#### Export Features
+- Generate structured exports in both JSON and Markdown formats
+- Include all extracted data categories in exports with proper formatting
+- Preserve relationships between data elements in exported formats
+
 ## Comparison with Other Services
 LlamaParse stands out in:
 - Handling highly structured documents with consistent formatting

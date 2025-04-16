@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { Extraction, LineItem, HandwrittenNote } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Edit, Save, Download, Plus, Trash2, Info, AlertTriangle } from "lucide-react";
+import { 
+  Edit, Save, Download, Plus, Trash2, Info, AlertTriangle, 
+  ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, Check, X
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +17,11 @@ import {
   TooltipProvider,
   TooltipTrigger 
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface ExtractedDataViewerProps {
   extraction: Extraction;
