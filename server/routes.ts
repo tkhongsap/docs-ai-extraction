@@ -8,7 +8,7 @@ import { insertDocumentSchema, insertExtractionSchema, LineItem, HandwrittenNote
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 // Import the OCR service
-import * as ocrService from "./services/ocrService";
+import * as ocrService from "./services/ocrService.js";
 
 // Setup upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -197,7 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setTimeout(async () => {
         try {
           // Process the document with OCR using the selected OCR service
-          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService);
+          const ocrResult = await ocrService.processDocument(document.storagePath, document.ocrService || 'mistral');
 
           // Generate markdown and JSON outputs
           const markdownOutput = ocrService.generateMarkdownOutput(ocrResult);

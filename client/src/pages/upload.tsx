@@ -48,6 +48,7 @@ export default function Upload() {
   const uploadFile = async (file: File): Promise<any> => {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("ocrService", ocrService);
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -157,6 +158,30 @@ export default function Upload() {
             uploadErrors={uploadErrors}
             isUploading={isUploading}
           />
+          
+          {/* OCR Service Selection */}
+          <div className="mt-6 border-t pt-4">
+            <div className="mb-4">
+              <Label htmlFor="ocr-service" className="mb-2 block">OCR Service</Label>
+              <Select
+                value={ocrService}
+                onValueChange={setOcrService}
+                disabled={isUploading}
+              >
+                <SelectTrigger id="ocr-service" className="w-full sm:w-[250px]">
+                  <SelectValue placeholder="Select OCR service" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mistral">Mistral AI (Recommended)</SelectItem>
+                  <SelectItem value="openai">OpenAI Vision</SelectItem>
+                  <SelectItem value="llamaparse">LlamaParse</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-sm text-gray-500">
+                Different OCR services have varying capabilities for extracting text from documents.
+              </p>
+            </div>
+          </div>
           
           {selectedFiles.length > 0 && (
             <div className="mt-6 flex justify-end">

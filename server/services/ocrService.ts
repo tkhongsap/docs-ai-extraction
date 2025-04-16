@@ -83,23 +83,8 @@ async function processMistralOCR(filePath: string, isPdf: boolean): Promise<OCRR
     
     // Placeholder for Mistral AI processing
     // In a real implementation, this would call the Mistral API
-    const systemPrompt = `You are an expert OCR system specialized in extracting data from documents. 
-    Extract all relevant information from the document, including:
-    - Vendor name
-    - Invoice number
-    - Invoice date
-    - Due date
-    - Total amount
-    - Tax amount
-    - Line items (description, quantity, unit price, amount)
-    - Any handwritten notes
-    
-    Format your response as a structured JSON object.`;
-    
-    // For demonstration purposes, simulate an OCR service response
-    // In production, this would be a call to the Mistral AI API
-    // const response = await mistralAI.processDocument(fileContent);
-    // This is a placeholder for API integration
+    // In a production implementation, we would use the real Mistral AI API
+    // This is just a placeholder for demonstration purposes
     
     // Parse JSON from response
     // In the actual implementation, parse the JSON from the Mistral AI response
