@@ -1,4 +1,3 @@
-
 import { LineItem, HandwrittenNote } from '@shared/schema';
 import OpenAI from 'openai';
 import axios from 'axios';
@@ -28,7 +27,7 @@ interface OCRResult {
 
 async function processDocument(filePath: string, service: string = 'llamaparse'): Promise<OCRResult> {
   console.log(`Processing document with file extension: ${filePath.split('.').pop()}`);
-  
+
   if (service !== 'llamaparse') {
     throw new Error('Currently only LlamaParse service is supported');
   }
@@ -39,7 +38,13 @@ async function processDocument(filePath: string, service: string = 'llamaparse')
   formData.append('file', new Blob([fileBuffer]), 'document.pdf');
 
   if (!LLAMAPARSE_API_KEY) {
-    throw new Error('LlamaParse API key is not configured');
+    console.error('LlamaParse API key is missing. Please add LLAMA_CLOUD_API_KEY to environment variables.');
+    throw new Error('LlamaParse API key is not configured. Please check environment variables.');
+  }
+
+  // Validate API key format
+  if (typeof LLAMAPARSE_API_KEY !== 'string' || LLAMAPARSE_API_KEY.trim() === '') {
+    throw new Error('Invalid LlamaParse API key format');
   }
 
   try {
@@ -49,6 +54,7 @@ async function processDocument(filePath: string, service: string = 'llamaparse')
         'Content-Type': 'multipart/form-data'
       }
     });
+    const llamaData = llamaparseResponse.data;
   } catch (error: any) {
     console.error('LlamaParse API error:', error.message);
     throw new Error(`LlamaParse API error: ${error.message}`);
@@ -56,7 +62,7 @@ async function processDocument(filePath: string, service: string = 'llamaparse')
 
   // Second pass: Use OpenAI Vision for handwritten notes and additional context
   const base64Image = fileBuffer.toString('base64');
-  
+
   const visionResponse = await openai.chat.completions.create({
     model: "gpt-4-vision-preview",
     messages: [
@@ -102,7 +108,7 @@ function parseHandwrittenNotes(visionContent: string): HandwrittenNote[] {
   // Extract notes from OpenAI Vision response
   const notes: HandwrittenNote[] = [];
   const noteRegex = /handwritten note|annotation|written text/i;
-  
+
   const lines = visionContent.split('\n');
   for (const line of lines) {
     if (noteRegex.test(line)) {
@@ -112,7 +118,7 @@ function parseHandwrittenNotes(visionContent: string): HandwrittenNote[] {
       });
     }
   }
-  
+
   return notes;
 }
 
