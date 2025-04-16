@@ -19,7 +19,7 @@ export default function Upload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
-  const [ocrService, setOcrService] = useState<string>("mistral");
+  const [ocrService, setOcrService] = useState<string>("llamaparse");
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -172,7 +172,7 @@ export default function Upload() {
                   <SelectValue placeholder="Select OCR service" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mistral">Mistral AI (Recommended)</SelectItem>
+                  <SelectItem value="mistral">Mistral AI</SelectItem>
                   <SelectItem value="openai">OpenAI Vision</SelectItem>
                   <SelectItem value="llamaparse">LlamaParse</SelectItem>
                 </SelectContent>
