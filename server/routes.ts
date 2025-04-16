@@ -730,7 +730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function extractHandwrittenNotes(filePath: string): Promise<any> {
     try {
       // Use OCR service to process the document
-      const result = await ocrService.default.processDocument(filePath);
+      const result = await ocrService.processDocument(filePath);
       
       // Extract handwritten notes and confidence scores
       return {
