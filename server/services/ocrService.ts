@@ -50,7 +50,7 @@ export async function processDocument(filePath: string, ocrService: string = 'mi
   }
 }
 
-// Helper function to convert PDF to image
+// Helper function to convert PDF to image - not currently used but kept for future reference
 async function convertPdfToImage(pdfPath: string): Promise<string> {
   console.log('Converting PDF to image...');
   const randomId = Math.random().toString(36).substring(2, 15);
@@ -69,7 +69,8 @@ async function convertPdfToImage(pdfPath: string): Promise<string> {
     } else {
       throw new Error('Failed to convert PDF to image');
     }
-  } catch (error) {
+  } catch (err) {
+    const error = err as Error;
     console.error('Error converting PDF to image:', error);
     throw new Error(`Failed to convert PDF to image: ${error.message}`);
   }
@@ -80,27 +81,17 @@ async function processPdfDocument(filePath: string, ocrService: string): Promise
   console.log(`Processing PDF document using ${ocrService} OCR...`);
 
   try {
-    // For Mistral and OpenAI, first convert PDF to image
-    if (ocrService === 'mistral' || ocrService === 'openai') {
-      const imagePath = await convertPdfToImage(filePath);
-      console.log(`Using converted image for OCR: ${imagePath}`);
-      
-      switch (ocrService) {
-        case 'mistral':
-          return await processMistralOCR(imagePath, false);
-        case 'openai':
-          return await processOpenAIOCR(imagePath, false);
-      }
-    }
-    
-    // For LlamaParse or any other service, use the original PDF
+    // Process directly with the appropriate service
     switch (ocrService) {
+      case 'mistral':
+        return await processMistralOCR(filePath, true);
+      case 'openai':
+        return await processOpenAIOCR(filePath, true);
       case 'llamaparse':
         return await processLlamaParseOCR(filePath, true);
       default:
-        // Fall back to Mistral with image conversion
-        const imagePath = await convertPdfToImage(filePath);
-        return await processMistralOCR(imagePath, false);
+        // Default to Mistral
+        return await processMistralOCR(filePath, true);
     }
   } catch (error) {
     console.error('Error in PDF processing:', error);
@@ -139,65 +130,23 @@ async function processMistralOCR(filePath: string, isPdf: boolean): Promise<OCRR
     const fileContent = fs.readFileSync(filePath);
     console.log(`File size: ${fileContent.length} bytes`);
     
-    // For testing/debugging, let's look at the file type
+    // Check if file is too large (Mistral has an 8MB limit for files)
+    const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8MB in bytes
+    if (fileContent.length > MAX_SIZE_BYTES) {
+      console.warn(`File is too large (${fileContent.length} bytes), Mistral has an 8MB limit.`);
+      throw new Error(`File is too large (${(fileContent.length/1024/1024).toFixed(2)}MB). Maximum size is 8MB for Mistral AI API.`);
+    }
+    
+    // For testing/debugging, look at the file type
     const fileExt = path.extname(filePath).toLowerCase();
     console.log(`File extension: ${fileExt}`);
     
-    // Use fetch to directly call the Mistral API
-    // Node.js has fetch built-in now, so we don't need to import it
-    const url = 'https://api.mistral.ai/v1/chat/completions';
-    
-    // Create the prompt for Mistral AI
-    const systemPrompt = `You are an expert OCR system specialized in invoice and document analysis. 
-Your task is to analyze the provided document image and extract structured information.
-
-Extract the following fields:
-1. Vendor name
-2. Invoice number
-3. Invoice date (in YYYY-MM-DD format)
-4. Due date (in YYYY-MM-DD format)
-5. Total amount (with currency symbol)
-6. Tax amount (with currency symbol)
-7. Line items (description, quantity, unit price, amount)
-8. Any handwritten notes
-
-BE CAREFUL: Always extract the exact information from the document. Do not make up or guess any values that aren't clearly visible in the document.
-If information is not present, return null for that field. Do not use placeholder data.
-
-Return the information in JSON format with this exact structure:
-{
-  "vendorName": string or null,
-  "invoiceNumber": string or null,
-  "invoiceDate": string or null,
-  "dueDate": string or null,
-  "totalAmount": string or null,
-  "taxAmount": string or null,
-  "lineItems": [
-    {
-      "description": string,
-      "quantity": number,
-      "unitPrice": number,
-      "amount": number
-    }
-  ],
-  "handwrittenNotes": [
-    {
-      "text": string,
-      "confidence": number
-    }
-  ]
-}
-
-For handwritten notes, assign a confidence value between 0 and 1, where 1 means highest confidence.
-Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, not strings.`;
-
     // Determine the correct MIME type based on file extension
     let mimeType;
     if (isPdf) {
       mimeType = 'application/pdf';
     } else {
       // Set proper image MIME type based on file extension
-      const fileExt = path.extname(filePath).toLowerCase();
       switch (fileExt) {
         case '.jpg':
         case '.jpeg':
@@ -223,12 +172,54 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
     
     console.log(`Using MIME type: ${mimeType} for file with extension: ${fileExt}`);
     
+    // Convert file to base64
     const base64Content = fileContent.toString('base64');
     const dataUrl = `data:${mimeType};base64,${base64Content}`;
     
     // For logging, show a small portion of the base64 string to verify format
     console.log(`Data URL starts with: ${dataUrl.substring(0, 50)}...`);
     
+    // Create the prompt for Mistral AI
+    const systemPrompt = `You are an expert OCR system specialized in invoice and document analysis. 
+Your task is to analyze the provided document and extract structured information.
+
+Extract the following fields:
+1. Vendor name
+2. Invoice number
+3. Invoice date (in YYYY-MM-DD format)
+4. Due date (in YYYY-MM-DD format)
+5. Total amount (with currency symbol)
+6. Tax amount (with currency symbol)
+7. Line items (description, quantity, unit price, amount)
+8. Any handwritten notes
+
+BE CAREFUL: Always extract the exact information from the document. Do not make up or guess any values that aren't clearly visible in the document.
+If information is not present, return null for that field. Do not use placeholder data.
+
+Return the information in JSON format exactly like this:
+{
+  "vendorName": string or null,
+  "invoiceNumber": string or null,
+  "invoiceDate": string or null,
+  "dueDate": string or null,
+  "totalAmount": string or null,
+  "taxAmount": string or null,
+  "lineItems": [
+    {
+      "description": string,
+      "quantity": number,
+      "unitPrice": number,
+      "amount": number
+    }
+  ],
+  "handwrittenNotes": [
+    {
+      "text": string,
+      "confidence": number
+    }
+  ]
+}`;
+
     // Construct the API request
     const requestBody = {
       model: "mistral-large-latest",
@@ -242,7 +233,7 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
           content: [
             {
               type: "text",
-              text: `I need to extract information from this ${isPdf ? 'PDF' : 'image'} document.`
+              text: `Please extract information from this ${isPdf ? 'PDF invoice' : 'invoice image'}.`
             },
             {
               type: "image_url",
@@ -259,7 +250,7 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
     console.log('Sending request to Mistral API...');
     
     // Make the API request
-    const response = await fetch(url, {
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -279,7 +270,7 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
     
     // Extract the assistant's message
     if (!responseData.choices || responseData.choices.length === 0) {
-      throw new Error('No response from Mistral API');
+      throw new Error('Empty response from Mistral API');
     }
     
     const assistantMessage = responseData.choices[0].message.content;
@@ -290,7 +281,11 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
       const jsonMatch = assistantMessage.match(/```(?:json)?([\s\S]*?)```/) || 
                         assistantMessage.match(/{[\s\S]*?}/);
       
-      const jsonText = jsonMatch ? jsonMatch[0].replace(/```json|```/g, '') : assistantMessage;
+      if (!jsonMatch) {
+        throw new Error('Could not find valid JSON in the response');
+      }
+      
+      const jsonText = jsonMatch[0].replace(/```json|```/g, '');
       const extractedData = JSON.parse(jsonText);
       
       // Validate the extracted data structure and apply defaults
@@ -319,12 +314,14 @@ Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, n
       
       console.log('Successfully extracted data with Mistral AI');
       return result;
-    } catch (jsonError) {
-      console.error('Error parsing JSON from Mistral response:', jsonError);
+    } catch (err) {
+      const error = err as Error;
+      console.error('Error parsing JSON from Mistral response:', error);
       console.log('Raw response:', assistantMessage);
-      throw new Error('Failed to parse Mistral AI response');
+      throw new Error(`Failed to parse Mistral AI response: ${error.message}`);
     }
-  } catch (error) {
+  } catch (err) {
+    const error = err as Error;
     console.error('Error processing document with Mistral AI:', error);
     throw error;
   }
