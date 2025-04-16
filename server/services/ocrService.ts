@@ -8,8 +8,12 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-const LLAMAPARSE_API_KEY = process.env.LLAMAPARSE_API_KEY;
+const LLAMAPARSE_API_KEY = process.env.LLAMA_CLOUD_API_KEY; // Updated to match the env variable name
 const LLAMAPARSE_ENDPOINT = 'https://api.llamaparse.ai/v1/parse';
+
+if (!LLAMAPARSE_API_KEY) {
+  console.error('LlamaParse API key is not set. Please check LLAMA_CLOUD_API_KEY environment variable.');
+}
 
 interface OCRResult {
   vendorName: string;
@@ -34,12 +38,21 @@ async function processDocument(filePath: string, service: string = 'llamaparse')
   const formData = new FormData();
   formData.append('file', new Blob([fileBuffer]), 'document.pdf');
 
-  const llamaparseResponse = await axios.post(LLAMAPARSE_ENDPOINT, formData, {
-    headers: {
-      'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
-      'Content-Type': 'multipart/form-data'
-    }
-  });
+  if (!LLAMAPARSE_API_KEY) {
+    throw new Error('LlamaParse API key is not configured');
+  }
+
+  try {
+    const llamaparseResponse = await axios.post(LLAMAPARSE_ENDPOINT, formData, {
+      headers: {
+        'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  } catch (error: any) {
+    console.error('LlamaParse API error:', error.message);
+    throw new Error(`LlamaParse API error: ${error.message}`);
+  }
 
   // Second pass: Use OpenAI Vision for handwritten notes and additional context
   const base64Image = fileBuffer.toString('base64');
