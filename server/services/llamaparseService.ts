@@ -137,8 +137,9 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
             'Authorization': `Bearer ${LLAMAPARSE_API_KEY}`,
             ...form.getHeaders(), // This is important to set the correct Content-Type with boundary
           },
-          timeout: 30000, // 30 second timeout
-          maxContentLength: 20 * 1024 * 1024, // 20MB max for larger files
+          timeout: 120000, // Increase timeout to 120 seconds for large files
+          maxContentLength: 50 * 1024 * 1024, // Increase to 50MB for larger files
+          maxBodyLength: 50 * 1024 * 1024, // Also increase maxBodyLength
         });
         
         console.log('LlamaParse API request was successful');
@@ -174,6 +175,10 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
         throw new Error('LlamaParse API error: Authentication failed - Invalid API key');
       } else if (error.response?.status === 404) {
         throw new Error('LlamaParse API error: API endpoint not found - Please contact support');
+      } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+        throw new Error('LlamaParse API error: Request timed out - The document may be too large or complex to process. Please try a smaller document or try again later.');
+      } else if (error.message?.includes('exceeded')) {
+        throw new Error('LlamaParse API error: File size limit exceeded - The document is too large. Please try a smaller document or reduce the file size.');
       }
     }
     

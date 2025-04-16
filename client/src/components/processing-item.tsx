@@ -36,7 +36,20 @@ export default function ProcessingItem({
     if (status === "uploaded") {
       return "Queued — Waiting for OCR/handwriting tasks to start";
     } else if (status === "error") {
-      return document.errorMessage || "Failed to process document — Please retry or contact support";
+      // Format error messages for better user experience
+      if (document.errorMessage) {
+        if (document.errorMessage.includes("timeout")) {
+          return "Processing timeout — The document may be too large or complex. Try with a smaller file.";
+        } else if (document.errorMessage.includes("exceeded")) {
+          return "File size limit exceeded — The document is too large. Please reduce the file size.";
+        } else if (document.errorMessage.includes("API key")) {
+          return "API authentication error — Please contact support to verify your account.";
+        } else {
+          return document.errorMessage;
+        }
+      } else {
+        return "Failed to process document — Please retry or contact support";
+      }
     } else if (status === "completed") {
       return "Processing complete — Ready to review";
     } else if (progress < 15) {
