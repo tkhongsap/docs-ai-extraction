@@ -8,7 +8,7 @@ import { insertDocumentSchema, insertExtractionSchema, LineItem, HandwrittenNote
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 // Import the OCR service
-import * as ocrService from "./services/ocrService.js";
+import * as ocrService from "./services/ocrService";
 
 // Setup upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
