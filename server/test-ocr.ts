@@ -20,8 +20,16 @@ async function testOcr() {
     console.log('==== OCR Result ====');
     console.log(JSON.stringify(result, null, 2));
     console.log('==== Test Complete ====');
-  } catch (error) {
-    console.error('Error during OCR processing:', error);
+  } catch (err) {
+    const error = err as Error;
+    console.error('Error during OCR processing:');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    
+    // If the error has additional details (like from the API)
+    if (error.message.includes('Mistral API Error')) {
+      console.error('API Error Details:', error.message);
+    }
   }
 }
 
