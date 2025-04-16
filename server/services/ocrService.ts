@@ -1,12 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import { LineItem, HandwrittenNote } from '@shared/schema';
+import { Mistral } from '@mistralai/mistralai';
 
-// Placeholder for OCR service API keys
-// In production, these would come from environment variables
+// OCR service API keys from environment variables
 const mistralApiKey = process.env.MISTRAL_API_KEY || '';
 const openaiApiKey = process.env.OPENAI_API_KEY || '';
 const llamaParseApiKey = process.env.LLAMAPARSE_API_KEY || '';
+
+// Initialize Mistral client
+const mistralClient = new Mistral(mistralApiKey);
 
 interface OCRResult {
   vendorName: string | null;
@@ -72,52 +75,122 @@ async function processImageDocument(filePath: string, ocrService: string): Promi
 
 // Process with Mistral AI OCR
 async function processMistralOCR(filePath: string, isPdf: boolean): Promise<OCRResult> {
-  console.log('Processing PDF file with Mistral AI...');
+  console.log(`Processing ${isPdf ? 'PDF' : 'image'} file with Mistral AI...`);
   
   try {
+    if (!mistralApiKey) {
+      throw new Error('Mistral API key is not configured. Please set the MISTRAL_API_KEY environment variable.');
+    }
+    
     // Read file as base64
     const fileContent = fs.readFileSync(filePath);
+    const base64Content = fileContent.toString('base64');
+    const fileType = isPdf ? 'application/pdf' : 'image/jpeg';
+    
+    // Create the prompt for Mistral AI
+    const systemPrompt = `You are an expert OCR system specialized in invoice and document analysis. 
+Extract the following information from the provided document:
+1. Vendor name
+2. Invoice number
+3. Invoice date (in YYYY-MM-DD format)
+4. Due date (in YYYY-MM-DD format)
+5. Total amount (with currency symbol)
+6. Tax amount (with currency symbol)
+7. Line items (description, quantity, unit price, amount)
+8. Any handwritten notes
+
+Return the information in JSON format with the following structure:
+{
+  "vendorName": string or null,
+  "invoiceNumber": string or null,
+  "invoiceDate": string or null,
+  "dueDate": string or null,
+  "totalAmount": string or null,
+  "taxAmount": string or null,
+  "lineItems": [
+    {
+      "description": string,
+      "quantity": number,
+      "unitPrice": number,
+      "amount": number
+    }
+  ],
+  "handwrittenNotes": [
+    {
+      "text": string,
+      "confidence": number
+    }
+  ]
+}
+
+For handwritten notes, assign a confidence value between 0 and 1, where 1 means highest confidence.
+Ensure all numeric fields (quantity, unitPrice, amount) are parsed as numbers, not strings.
+If a field is not present in the document, set it to null.`;
+
+    const userPrompt = `Process this ${isPdf ? 'PDF' : 'image'} document and extract invoice information according to the required format.`;
     
     // Extract document context using Mistral AI
-    console.log('Using Mistral AI chat to analyze document context...');
+    console.log('Using Mistral AI to analyze document...');
     
-    // Placeholder for Mistral AI processing
-    // In a real implementation, this would call the Mistral API
-    // In a production implementation, we would use the real Mistral AI API
-    // This is just a placeholder for demonstration purposes
-    
-    // Parse JSON from response
-    // In the actual implementation, parse the JSON from the Mistral AI response
-    
-    // Return a simulated extraction (in production, parse from actual API response)
-    return {
-      vendorName: "ABC Company",
-      invoiceNumber: "INV-12345",
-      invoiceDate: "2023-04-15",
-      dueDate: "2023-05-15",
-      totalAmount: "$1,234.56",
-      taxAmount: "$123.45",
-      lineItems: [
-        {
-          description: "Product A",
-          quantity: 2,
-          unitPrice: 100,
-          amount: 200
-        },
-        {
-          description: "Service B",
-          quantity: 5,
-          unitPrice: 50,
-          amount: 250
+    // Call Mistral API with the document as a base64 attachment
+    const response = await mistralClient.chat({
+      model: "mistral-large-latest",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { 
+          role: "user", 
+          content: [
+            { type: "text", text: userPrompt },
+            { type: "image", image_url: { url: `data:${fileType};base64,${base64Content}` } }
+          ]
         }
       ],
-      handwrittenNotes: [
-        {
-          text: "Approved by John",
-          confidence: 0.85
-        }
-      ]
-    };
+      temperature: 0.0 // Low temperature for more deterministic results
+    });
+    
+    // Get the response text
+    const assistantMessage = response.choices[0].message.content;
+    
+    // Try to extract JSON from the response
+    try {
+      // Use a regex to extract JSON object if it's wrapped in markdown code blocks or other text
+      const jsonMatch = assistantMessage.match(/```(?:json)?([\s\S]*?)```/) || 
+                        assistantMessage.match(/{[\s\S]*?}/);
+      
+      const jsonText = jsonMatch ? jsonMatch[0].replace(/```json|```/g, '') : assistantMessage;
+      const extractedData = JSON.parse(jsonText);
+      
+      // Validate the extracted data structure and apply defaults
+      const result: OCRResult = {
+        vendorName: extractedData.vendorName || null,
+        invoiceNumber: extractedData.invoiceNumber || null,
+        invoiceDate: extractedData.invoiceDate || null,
+        dueDate: extractedData.dueDate || null,
+        totalAmount: extractedData.totalAmount || null,
+        taxAmount: extractedData.taxAmount || null,
+        lineItems: Array.isArray(extractedData.lineItems) 
+          ? extractedData.lineItems.map((item: any) => ({
+              description: item.description || '',
+              quantity: Number(item.quantity) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              amount: Number(item.amount) || 0
+            }))
+          : [],
+        handwrittenNotes: Array.isArray(extractedData.handwrittenNotes)
+          ? extractedData.handwrittenNotes.map((note: any) => ({
+              text: note.text || '',
+              confidence: Number(note.confidence) || 0.5
+            }))
+          : []
+      };
+      
+      console.log('Successfully extracted data with Mistral AI');
+      return result;
+    } catch (jsonError) {
+      console.error('Error parsing JSON from Mistral response:', jsonError);
+      console.log('Raw response:', assistantMessage);
+      throw new Error('Failed to parse Mistral AI response');
+    }
   } catch (error) {
     console.error('Error processing document with Mistral AI:', error);
     throw error;
