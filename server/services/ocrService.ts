@@ -136,20 +136,34 @@ If a field is not present in the document, set it to null.`;
     const response = await mistralClient.chat.complete({
       model: "mistral-large-latest",
       messages: [
-        { role: "system", content: systemPrompt },
+        { 
+          role: "system", 
+          content: systemPrompt 
+        },
         { 
           role: "user", 
-          content: [
-            { type: "text", text: userPrompt },
-            { type: "image_url", image_url: { url: `data:${fileType};base64,${base64Content}` } }
-          ]
+          content: userPrompt + "\n\n[Image attached]" // Simplified approach for now
         }
       ],
       temperature: 0.0 // Low temperature for more deterministic results
     });
     
-    // Get the response text
-    const assistantMessage = response?.choices?.[0]?.message?.content || '';
+    // Get the response text, ensuring it's a string
+    let assistantMessage = '';
+    if (response && response.choices && response.choices.length > 0) {
+      const messageContent = response.choices[0].message.content;
+      if (typeof messageContent === 'string') {
+        assistantMessage = messageContent;
+      } else if (Array.isArray(messageContent)) {
+        // If content is an array of chunks, concatenate text chunks
+        assistantMessage = messageContent
+          .filter(chunk => chunk.type === 'text')
+          .map(chunk => chunk.text)
+          .join('');
+      }
+    }
+    
+    console.log('Received response from Mistral:', assistantMessage);
     
     // Try to extract JSON from the response
     try {
