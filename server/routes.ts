@@ -751,11 +751,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // Add the getExtractionVersions method to DatabaseStorage prototype
-  declare module './storage' {
-    interface DatabaseStorage {
-      getExtractionVersions(documentId: number): Promise<any[]>;
-    }
+  // Temporary interface for extraction version history
+  interface ExtractionVersion {
+    id: number;
+    extractionId: number;
+    version: number;
+    extraction: any;
+    changedFields: string[];
+    timestamp: Date;
   }
 
   // Implementation for extraction version history
