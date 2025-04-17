@@ -148,13 +148,28 @@ async def process_with_openai(file: UploadFile = File(...)):
         # Process with OpenAI
         extracted_data = openai_extract(processed_content, processed_content_type)
         
+        # Log the raw response for debugging
+        print(f"OpenAI raw response from main.py: {extracted_data[:200]}...")
+        
         # Try to parse JSON from response
         try:
             json_data = json.loads(extracted_data)
             return JSONResponse(content=json_data)
-        except json.JSONDecodeError:
-            # If not JSON, return raw text
-            return JSONResponse(content={"result": extracted_data})
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error in main.py: {str(e)}")
+            
+            # Create a default response with error details
+            default_response = {
+                "vendorName": "Could not extract vendor name",
+                "invoiceNumber": "Unknown",
+                "totalAmount": 0,
+                "lineItems": [],
+                "handwrittenNotes": [],
+                "error": f"Failed to parse OpenAI response: {str(e)}",
+                "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+            }
+            
+            return JSONResponse(content=default_response)
         
     except HTTPException:
         raise  # Reraise HTTP exceptions
@@ -200,13 +215,28 @@ async def process_with_mistral(file: UploadFile = File(...)):
         # Process with Mistral
         extracted_data = mistral_extract(processed_content, processed_content_type)
         
+        # Log the raw response for debugging
+        print(f"Mistral raw response from main.py: {extracted_data[:200]}...")
+        
         # Try to parse JSON from response
         try:
             json_data = json.loads(extracted_data)
             return JSONResponse(content=json_data)
-        except json.JSONDecodeError:
-            # If not JSON, return raw text
-            return JSONResponse(content={"result": extracted_data})
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error in main.py (Mistral): {str(e)}")
+            
+            # Create a default response with error details
+            default_response = {
+                "vendorName": "Could not extract vendor name",
+                "invoiceNumber": "Unknown",
+                "totalAmount": 0,
+                "lineItems": [],
+                "handwrittenNotes": [],
+                "error": f"Failed to parse Mistral response: {str(e)}",
+                "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+            }
+            
+            return JSONResponse(content=default_response)
         
     except HTTPException:
         raise  # Reraise HTTP exceptions
