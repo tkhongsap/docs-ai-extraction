@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Extraction, LineItem, HandwrittenNote } from "@shared/schema";
+import { Extraction, LineItem, HandwrittenNote, Document } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { 
@@ -9,7 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { 
   Tooltip,
