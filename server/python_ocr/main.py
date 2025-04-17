@@ -226,10 +226,43 @@ async def process_with_mistral(file: UploadFile = File(...)):
         processed_content = file_content
         processed_content_type = content_type
         
-        # If it's a PDF, convert to image (for consistency with OpenAI endpoint)
+        # If it's a PDF, convert to image
         if content_type == 'application/pdf' or file_ext == 'pdf':
-            # Keep PDF as is for Mistral, as it supports PDF directly
-            pass
+            try:
+                print("Converting PDF to image for Mistral processing...")
+                # Convert first page of PDF to image
+                try:
+                    pdf_images = convert_from_bytes(processed_content, first_page=1, last_page=1)
+                except Exception as pdf_err:
+                    print(f"Error in PDF conversion: {str(pdf_err)}")
+                    raise HTTPException(status_code=400, detail=f"PDF conversion error: {str(pdf_err)}")
+                
+                if pdf_images and len(pdf_images) > 0:
+                    # Save the image to a temporary file
+                    temp_path = os.path.join(tempfile.gettempdir(), f"pdf_to_img_{uuid.uuid4()}.png")
+                    pdf_images[0].save(temp_path, 'PNG')
+                    
+                    # Read the image back
+                    with open(temp_path, 'rb') as img_file:
+                        processed_content = img_file.read()
+                    
+                    # Update content type
+                    processed_content_type = 'image/png'
+                    
+                    # Delete temp file
+                    os.unlink(temp_path)
+                    
+                    # Also save converted image to upload folder for debugging
+                    converted_img_path = UPLOAD_FOLDER / f"{os.path.splitext(file.filename)[0]}_mistral_converted.png"
+                    with open(converted_img_path, "wb") as f:
+                        f.write(processed_content)
+                    
+                    print(f"PDF successfully converted to image for Mistral processing: {converted_img_path}")
+                else:
+                    raise HTTPException(status_code=400, detail="Could not convert PDF to image (no pages found)")
+            except Exception as pdf_err:
+                print(f"Failed to convert PDF for Mistral: {str(pdf_err)}")
+                raise HTTPException(status_code=400, detail=f"Error converting PDF for Mistral: {str(pdf_err)}")
         
         # Process with Mistral - wrap in additional try-except
         try:
