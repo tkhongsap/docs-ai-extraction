@@ -21,9 +21,9 @@ trap cleanup SIGINT SIGTERM
 # Start Python OCR API server
 echo "Starting Python OCR API server on port 5006..."
 export OCR_API_PORT=5006
-cd server && python -m python_ocr.run_api &
+cd server/python_ocr && python start_ocr_server.py &
 PYTHON_PID=$!
-cd ..
+cd ../..
 
 # Wait for Python server to initialize
 echo "Waiting for Python OCR API to initialize..."
