@@ -95,13 +95,19 @@ def extract_invoice_data(file_content, content_type):
         }
         
         # Create messages for Mistral API with simpler format
-        # The error suggests Mistral expects a different format
+        # Mistral requires the image to be sent as part of the message content
         payload = {
             "model": "mistral-large-latest",
             "messages": [
                 {
                     "role": "user",
-                    "content": prompt + "\n\n[Image content not displayed here, but is being processed]"
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url", 
+                            "image_url": {"url": f"data:{mime_type};base64,{base64_encoded}"}
+                        }
+                    ]
                 }
             ],
             "max_tokens": 2000
@@ -116,16 +122,21 @@ def extract_invoice_data(file_content, content_type):
             for msg_idx, msg in enumerate(debug_payload["messages"]):
                 if "content" in msg and isinstance(msg["content"], list):
                     for content_idx, content_item in enumerate(msg["content"]):
-                        if isinstance(content_item, dict) and "image" in content_item:
-                            debug_payload["messages"][msg_idx]["content"][content_idx]["image"]["data"] = "[BASE64_DATA]"
+                        if isinstance(content_item, dict) and "image_url" in content_item:
+                            debug_payload["messages"][msg_idx]["content"][content_idx]["image_url"]["url"] = "[BASE64_DATA]"
         
         print(f"Mistral API payload structure: {json.dumps(debug_payload, indent=2)[:500]}...")
         
-        # Make API request
+        # Make API request with a timeout to avoid hanging indefinitely
+        # Default to 30 seconds, can be adjusted based on expected response times
+        timeout = 30  # seconds
+        print(f"Making request to Mistral API with {timeout}s timeout...")
+        
         response = requests.post(
             "https://api.mistral.ai/v1/chat/completions",
             headers=headers,
-            json=payload
+            json=payload,
+            timeout=timeout
         )
         
         # Parse response and add detailed logging
@@ -230,8 +241,29 @@ def extract_invoice_data(file_content, content_type):
                 "error": f"Failed to parse JSON from Mistral response: {str(e)}"
             })
         
+    except requests.exceptions.Timeout:
+        print("Mistral API request timed out")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": "Mistral API request timed out after 30 seconds"
+        })
+    except requests.exceptions.ConnectionError:
+        print("Mistral API connection error")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": "Failed to connect to Mistral API: connection error"
+        })
     except Exception as e:
         error_message = str(e)
+        print(f"Mistral API general error: {error_message}")
         return json.dumps({
             "vendorName": "",
             "invoiceNumber": "",

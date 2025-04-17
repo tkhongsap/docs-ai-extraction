@@ -80,25 +80,38 @@ def extract_invoice_data(file_content, content_type):
     """
     
     try:
-        # Call the OpenAI API with the image
-        response = openai.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{content_type};base64,{encoded_content}"
+        # Set a timeout for the API call to prevent hanging requests
+        # Default timeout of 60 seconds for image processing (which can take longer than text)
+        timeout = 60
+        
+        try:
+            print(f"Making request to OpenAI API with {timeout}s timeout...")
+            
+            # Call the OpenAI API with the image and timeout
+            response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{content_type};base64,{encoded_content}"
+                                }
                             }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=2000
-        )
+                        ]
+                    }
+                ],
+                max_tokens=2000,
+                timeout=timeout
+            )
+        except Exception as api_error:
+            print(f"OpenAI API call error: {str(api_error)}")
+            if "timeout" in str(api_error).lower():
+                raise TimeoutError(f"OpenAI API request timed out after {timeout} seconds")
+            raise
         
         # Get the response text
         if not response.choices or not response.choices[0].message.content:
@@ -182,13 +195,54 @@ def extract_invoice_data(file_content, content_type):
                 "error": f"Failed to parse JSON from OpenAI response: {str(e)}"
             })
         
-    except Exception as e:
-        error_message = str(e)
+    except TimeoutError as e:
+        print(f"OpenAI API request timed out: {str(e)}")
         return json.dumps({
             "vendorName": "",
             "invoiceNumber": "",
             "totalAmount": 0,
             "lineItems": [],
             "handwrittenNotes": [],
-            "error": f"OpenAI API error: {error_message}"
+            "error": str(e)
+        })
+    except openai.APIConnectionError as e:
+        print(f"OpenAI API connection error: {str(e)}")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": f"Failed to connect to OpenAI API: {str(e)}"
+        })
+    except openai.RateLimitError as e:
+        print(f"OpenAI API rate limit exceeded: {str(e)}")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": "OpenAI API rate limit exceeded. Please try again later."
+        })
+    except openai.APIError as e:
+        print(f"OpenAI API error: {str(e)}")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": f"OpenAI API error: {str(e)}"
+        })
+    except Exception as e:
+        error_message = str(e)
+        print(f"Unexpected error when processing with OpenAI: {error_message}")
+        return json.dumps({
+            "vendorName": "",
+            "invoiceNumber": "",
+            "totalAmount": 0,
+            "lineItems": [],
+            "handwrittenNotes": [],
+            "error": f"Error processing document with OpenAI: {error_message}"
         })
