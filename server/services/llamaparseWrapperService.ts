@@ -69,7 +69,7 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
   
   try {
     // Call Python script with file path
-    const pythonScript = path.join(__dirname, '../scripts/llama_parse_wrapper.py');
+    const pythonScript = path.join(__dirname, '../scripts/simple_llama_wrapper.py');
     
     // Make sure our Python script is executable
     fs.chmodSync(pythonScript, 0o755);
@@ -77,7 +77,7 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
     // Call Python script and wait for response
     const result = await new Promise<string>((resolve, reject) => {
       // We use spawn instead of exec to handle larger outputs
-      const pythonProcess = spawn('python3', [pythonScript, absoluteFilePath, 'invoice']);
+      const pythonProcess = spawn('python3', [pythonScript, absoluteFilePath, '--document-type', 'invoice']);
       
       let stdoutData = '';
       let stderrData = '';
@@ -122,8 +122,7 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
       throw new Error(`LlamaParse error: ${llamaParseResponse.error}`);
     }
     
-    // Extract raw data
-    const rawData = llamaParseResponse.extraction;
+    // Direct mapping from response
     const confidenceScores = llamaParseResponse.confidenceScores;
     const layoutData = llamaParseResponse.layoutData || [];
     const processingMetadata = llamaParseResponse.processingMetadata;
@@ -132,31 +131,23 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
     const lineItems: LineItem[] = [];
     
     // Process line items from the extraction
-    if (rawData.items && Array.isArray(rawData.items)) {
-      rawData.items.forEach((item: any) => {
-        const lineItem: LineItem = {
-          description: item.name || 'Unknown item',
-          quantity: parseFloat(item.quantity) || 1,
-          unitPrice: parseFloat(item.price) || 0,
-          amount: parseFloat(item.amount) || parseFloat(item.quantity) * parseFloat(item.price) || 0,
-          confidence: 80 // Default confidence if not provided
-        };
-        
-        lineItems.push(lineItem);
+    if (llamaParseResponse.lineItems && Array.isArray(llamaParseResponse.lineItems)) {
+      llamaParseResponse.lineItems.forEach((item: any) => {
+        lineItems.push(item);
       });
     }
     
-    // Create default handwritten notes array
-    const handwrittenNotes: HandwrittenNote[] = [];
+    // Use handwritten notes or create empty array
+    const handwrittenNotes: HandwrittenNote[] = llamaParseResponse.handwrittenNotes || [];
     
-    // Map other data
+    // Map other data from direct response
     return {
-      vendorName: rawData.company_name,
-      vendorAddress: rawData.address,
-      invoiceNumber: rawData.invoice_numbers_or_po_numbers,
-      invoiceDate: rawData.date ? new Date(rawData.date) : undefined,
-      totalAmount: parseFloat(rawData.total_amount) || 0,
-      additionalInfo: rawData.other,
+      vendorName: llamaParseResponse.vendorName,
+      vendorAddress: llamaParseResponse.vendorAddress,
+      invoiceNumber: llamaParseResponse.invoiceNumber,
+      invoiceDate: llamaParseResponse.invoiceDate ? new Date(llamaParseResponse.invoiceDate) : undefined,
+      totalAmount: llamaParseResponse.totalAmount || 0,
+      additionalInfo: llamaParseResponse.additionalInfo,
       lineItems,
       handwrittenNotes,
       confidenceScores,

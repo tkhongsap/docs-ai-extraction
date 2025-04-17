@@ -10,7 +10,7 @@ import { fromZodError } from "zod-validation-error";
 // Import the OCR service
 import ocrService from "./services/ocrService";
 import { DatabaseStorage } from './storage';
-import llamaparseService from './services/llamaparseService';
+import llamaparseWrapperService from './services/llamaparseWrapperService';
 
 // Setup upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
