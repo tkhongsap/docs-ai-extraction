@@ -673,29 +673,6 @@ export default function ExtractedDataViewer({
                   <p className="text-sm text-gray-500">OCR Engine</p>
                   <div className="flex items-center">
                     <span className="text-sm font-medium mr-2">
-                      {extraction.processingMetadata?.ocrEngine || "LlamaParse"}
-                    </span>
-                    {extraction.processingMetadata?.ocrEngine?.includes('fallback') ? (
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                        Fallback
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        Primary
-                      </Badge>
-                    )}
-                  </div>
-                  {extraction.processingMetadata?.processingParams?.reason && (
-                    <p className="text-xs text-gray-500 mt-1 italic">
-                      Fallback reason: {extraction.processingMetadata.processingParams.reason}
-                    </p>
-                  )}
-                </div>
-                
-                <div>
-                  <p className="text-sm text-gray-500">OCR Service</p>
-                  <div className="flex items-center">
-                    <span className="text-sm font-medium mr-2">
                       {document?.ocrService ? (
                         document.ocrService === 'openai' ? 'OpenAI OCR' :
                         document.ocrService === 'mistral' ? 'MistralAI OCR' :
@@ -707,6 +684,11 @@ export default function ExtractedDataViewer({
                       Selected
                     </Badge>
                   </div>
+                  {extraction.processingMetadata?.processingParams?.reason && (
+                    <p className="text-xs text-gray-500 mt-1 italic">
+                      Fallback reason: {extraction.processingMetadata.processingParams.reason}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
