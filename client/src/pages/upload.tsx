@@ -19,13 +19,13 @@ export default function Upload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
-  const [ocrService, setOcrService] = useState<string>("llamaparse");
+  const [ocrService, setOcrService] = useState<string>("openai"); // Default to OpenAI
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const handleFilesSelected = (files: File[]) => {
     setSelectedFiles(files);
-    
+
     // Reset progress and errors when files are selected
     setUploadProgress({});
     setUploadErrors({});
@@ -37,7 +37,7 @@ export default function Upload() {
       [file.name]: progress
     }));
   };
-  
+
   const setFileError = (file: File, error: string) => {
     setUploadErrors(prev => ({
       ...prev,
@@ -105,17 +105,17 @@ export default function Upload() {
     try {
       const uploadPromises = selectedFiles.map(file => uploadFile(file));
       const results = await Promise.allSettled(uploadPromises);
-      
+
       const successCount = results.filter(result => result.status === "fulfilled").length;
       const failCount = results.filter(result => result.status === "rejected").length;
-      
+
       if (successCount > 0) {
         toast({
           title: "Upload successful",
           description: `Successfully uploaded ${successCount} document${successCount > 1 ? 's' : ''}${failCount ? `, ${failCount} failed` : ''}.`,
           variant: "default",
         });
-        
+
         // If all files were uploaded successfully, navigate to processing page
         if (failCount === 0) {
           navigate("/processing");
@@ -158,7 +158,7 @@ export default function Upload() {
             uploadErrors={uploadErrors}
             isUploading={isUploading}
           />
-          
+
           {/* OCR Service Selection */}
           <div className="mt-6 border-t pt-4">
             <div className="mb-4">
@@ -172,32 +172,32 @@ export default function Upload() {
                   <SelectValue placeholder="Select OCR service" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mistral">Mistral AI</SelectItem>
-                  <SelectItem value="openai">OpenAI Vision</SelectItem>
-                  <SelectItem value="llamaparse">LlamaParse</SelectItem>
+                  <SelectItem value="openai">OpenAI OCR</SelectItem>
+                  <SelectItem value="mistral">MistralAI OCR</SelectItem>
+                  <SelectItem value="ms-document-intelligence">MS Document Intelligence</SelectItem>
                 </SelectContent>
               </Select>
               <p className="mt-2 text-sm text-gray-500">
-                {ocrService === 'llamaparse' ? (
-                  <>
-                    <strong>LlamaParse:</strong> Specialized in extracting structured data from invoices with high accuracy. 
-                    Perfect for capturing vendor details, line items, and payment information.
-                  </>
-                ) : ocrService === 'openai' ? (
-                  <>
-                    <strong>OpenAI Vision:</strong> Excellent at understanding complex layouts and mixed content.
-                    Great for documents with handwritten notes and annotations.
-                  </>
-                ) : (
-                  <>
-                    <strong>Mistral AI:</strong> General-purpose OCR with good balance of speed and accuracy.
-                    Suitable for standard document formats.
-                  </>
-                )}
+                {ocrService === 'openai' ? (
+                    <>
+                      <strong>OpenAI OCR:</strong> Advanced OCR with excellent accuracy for complex layouts and mixed content.
+                      Great for documents with handwritten notes and annotations.
+                    </>
+                  ) : ocrService === 'mistral' ? (
+                    <>
+                      <strong>MistralAI OCR:</strong> General-purpose OCR with good balance of speed and accuracy.
+                      Suitable for standard document formats and multilingual content.
+                    </>
+                  ) : (
+                    <>
+                      <strong>MS Document Intelligence:</strong> Enterprise-grade document processing with high accuracy.
+                      Excellent for forms, tables, and structured documents.
+                    </>
+                  )}
               </p>
             </div>
           </div>
-          
+
           {selectedFiles.length > 0 && (
             <div className="mt-6 flex justify-end">
               <Button 
@@ -240,7 +240,7 @@ export default function Upload() {
 
       {/* Upload Tips */}
       <div className="bg-blue-50 rounded-lg p-5">
-        <h3 className="font-bold text-primary mb-3">Tips for Best Results with {ocrService === 'llamaparse' ? 'LlamaParse' : ocrService === 'openai' ? 'OpenAI' : 'Mistral'}</h3>
+        <h3 className="font-bold text-primary mb-3">Tips for Best Results with {ocrService === 'openai' ? 'OpenAI OCR' : ocrService === 'mistral' ? 'MistralAI OCR' : 'MS Document Intelligence'}</h3>
         <ul className="text-gray-700 space-y-2">
           <li className="flex items-start">
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
@@ -250,24 +250,7 @@ export default function Upload() {
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
             <span>Make sure text is clearly visible and not blurred</span>
           </li>
-          {ocrService === 'llamaparse' && (
-            <>
-              <li className="flex items-start">
-                <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
-                <span><strong>Invoice Processing:</strong> Ensure invoice headers, line items, and totals are clearly visible</span>
-              </li>
-              <li className="flex items-start">
-                <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
-                <span>Original digital invoices perform better than scanned copies</span>
-              </li>
-            </>
-          )}
-          {ocrService === 'openai' && (
-            <li className="flex items-start">
-              <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
-              <span>For handwritten notes, write clearly and avoid overlapping text</span>
-            </li>
-          )}
+          
           <li className="flex items-start">
             <CheckCircle className="text-primary h-5 w-5 mt-0.5 mr-2" />
             <span>For best results with invoices, ensure all edges and table borders are visible</span>
