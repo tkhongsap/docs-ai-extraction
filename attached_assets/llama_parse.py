@@ -7,7 +7,7 @@ import requests
 from datetime import datetime
 from typing import Dict, Any, Union, List, Optional
 
-# กำหนดค่า API keys โดยตรง
+# Load API keys from environment variables
 os.environ["LLAMA_CLOUD_API_KEY"] = os.environ.get("LLAMA_CLOUD_API_KEY", "")
 os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")
 

@@ -97,3 +97,10 @@ _site/
 *.sqlite
 *.sqlite3
 *.db
+
+# Patch files
+*.patch
+all_changes.patch
+
+# Files that may contain sensitive data
+replacements.txt
