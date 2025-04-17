@@ -7,9 +7,9 @@ This module handles document OCR processing using Mistral AI.
 import os
 import json
 import base64
-import requests
-import tempfile
+import re
 import uuid
+import tempfile
 from datetime import datetime
 from dotenv import load_dotenv
 from mistralai import Mistral
@@ -19,6 +19,49 @@ load_dotenv(override=True)
 
 # Get API key from environment
 MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
+
+# Extraction query for invoice processing
+EXTRACTION_QUERY = """
+Extract all invoice information from this document. The extracted information should be organized in the following JSON format:
+{
+    "vendorName": "Company Name",
+    "vendorAddress": "Full address",
+    "vendorContact": "Phone, email, or website",
+    "clientName": "Client name",
+    "clientAddress": "Client address",
+    "invoiceNumber": "INV-12345",
+    "invoiceDate": "YYYY-MM-DD",
+    "dueDate": "YYYY-MM-DD",
+    "totalAmount": 1234.56,
+    "subtotalAmount": 1000.00,
+    "taxAmount": 234.56,
+    "currency": "USD",
+    "lineItems": [
+        {
+            "description": "Item description",
+            "quantity": 2,
+            "unitPrice": 500.00,
+            "amount": 1000.00,
+            "itemCode": "IT-001"
+        }
+    ],
+    "handwrittenNotes": [
+        {
+            "text": "Handwritten note content",
+            "confidence": 80
+        }
+    ]
+}
+
+Make sure to:
+1. Extract all line items with their details
+2. Identify any handwritten notes or annotations
+3. Provide numeric values without currency symbols
+4. Format dates in ISO format (YYYY-MM-DD)
+5. Include empty arrays if no line items or notes are present
+
+Return ONLY the JSON with no additional text.
+"""
 
 def generate_markdown_from_extraction(data):
     """
@@ -123,6 +166,91 @@ def generate_markdown_from_extraction(data):
     # Join all lines with newlines
     return "\n".join(md)
 
+def extract_json_from_text(text):
+    """
+    Extract JSON from text that may include markdown or other content
+    
+    Args:
+        text (str): The text containing JSON data
+        
+    Returns:
+        str: Extracted JSON string
+    """
+    # First try to find JSON within markdown code blocks
+    json_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+    json_matches = re.findall(json_pattern, text)
+    
+    if json_matches:
+        # Use the first JSON block found
+        result = json_matches[0].strip()
+    else:
+        # Try to find JSON with opening/closing braces if no code blocks found
+        brace_pattern = r'(\{[\s\S]*\})'
+        brace_matches = re.findall(brace_pattern, text)
+        if brace_matches:
+            result = brace_matches[0].strip()
+        else:
+            # No JSON found
+            result = text.strip()
+    
+    # Additional cleanup to ensure we have valid JSON
+    if result.startswith('```'):
+        result = result.lstrip('`')
+    if result.endswith('```'):
+        result = result.rstrip('`')
+    
+    return result
+
+def create_error_response(error_message, processing_time=0):
+    """
+    Create a standardized error response
+    
+    Args:
+        error_message (str): The error message
+        processing_time (float): The processing time in seconds
+        
+    Returns:
+        dict: Standardized error response
+    """
+    error_response = {
+        "vendorName": "",
+        "vendorAddress": "",
+        "vendorContact": "",
+        "clientName": "",
+        "clientAddress": "",
+        "invoiceNumber": "",
+        "totalAmount": 0,
+        "currency": "",
+        "paymentTerms": "",
+        "paymentMethod": "",
+        "lineItems": [],
+        "handwrittenNotes": [],
+        "additionalInfo": "",
+        "confidenceScores": {
+            "overall": 0,
+            "vendorInfo": 0,
+            "invoiceDetails": 0,
+            "lineItems": 0,
+            "totals": 0,
+            "handwrittenNotes": 0,
+            "fieldSpecific": {}
+        },
+        "layoutData": [],
+        "processingMetadata": {
+            "ocrEngine": "mistral",
+            "processingTime": processing_time,
+            "processingTimestamp": datetime.now().isoformat(),
+            "documentClassification": "invoice",
+            "error": error_message
+        }
+    }
+    
+    # Generate markdown output for error case
+    markdown_output = generate_markdown_from_extraction(error_response)
+    error_response["markdownOutput"] = markdown_output
+    
+    return error_response
+
 def extract_invoice_data(file_content, content_type):
     """
     Use Mistral AI to analyze and extract data from invoices
@@ -137,207 +265,118 @@ def extract_invoice_data(file_content, content_type):
     if not MISTRAL_API_KEY:
         raise ValueError("Mistral API key not found in environment variables")
     
-    # Convert file to base64
-    base64_encoded = base64.b64encode(file_content).decode("utf-8")
+    print(f"Processing document with content type: {content_type} using Mistral")
     
-    # Determine file type and create appropriate image message
-    if content_type.startswith("image/"):
-        # For image files
-        mime_type = content_type
-    elif content_type == "application/pdf":
-        # For PDF files (Mistral can handle PDFs directly)
-        mime_type = content_type
-    else:
-        # Default to binary data
-        mime_type = "application/octet-stream"
+    # Create Mistral client
+    client = Mistral(api_key=MISTRAL_API_KEY)
     
-    # Create prompt with detailed invoice extraction instructions
-    prompt = """
-    Extract all invoice information from this document. The extracted information should be organized in the following JSON format:
-    {
-        "vendorName": "Company Name",
-        "vendorAddress": "Full address",
-        "vendorContact": "Phone, email, or website",
-        "clientName": "Client name",
-        "clientAddress": "Client address",
-        "invoiceNumber": "INV-12345",
-        "invoiceDate": "YYYY-MM-DD",
-        "dueDate": "YYYY-MM-DD",
-        "totalAmount": 1234.56,
-        "subtotalAmount": 1000.00,
-        "taxAmount": 234.56,
-        "currency": "USD",
-        "lineItems": [
-            {
-                "description": "Item description",
-                "quantity": 2,
-                "unitPrice": 500.00,
-                "amount": 1000.00,
-                "itemCode": "IT-001"
-            }
-        ],
-        "handwrittenNotes": [
-            {
-                "text": "Handwritten note content",
-                "confidence": 80
-            }
-        ]
-    }
+    # Determine if it's a PDF file
+    is_pdf = content_type == "application/pdf"
     
-    Make sure to:
-    1. Extract all line items with their details
-    2. Identify any handwritten notes or annotations
-    3. Provide numeric values without currency symbols
-    4. Format dates in ISO format (YYYY-MM-DD)
-    5. Include empty arrays if no line items or notes are present
-    
-    Return ONLY the JSON with no additional text.
-    """
+    start_time = datetime.now()
     
     try:
-        # Using direct API call instead of SDK to avoid incompatibility issues
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {MISTRAL_API_KEY}"
-        }
-        
-        # Create messages for Mistral API with simpler format
-        # Mistral requires the image to be sent as part of the message content
-        payload = {
-            "model": "mistral-large-latest",
-            "messages": [
+        if is_pdf:
+            print("Processing PDF file with Mistral service...")
+            
+            # For PDFs, upload the file and get a signed URL
+            uploaded_file = client.files.upload(
+                file={
+                    "file_name": f"invoice_document_{uuid.uuid4()}.pdf",
+                    "content": file_content
+                },
+                purpose="ocr"
+            )
+            
+            # Get a signed URL for the uploaded file
+            signed_url = client.files.get_signed_url(file_id=uploaded_file.id)
+            
+            print(f"File uploaded to Mistral with ID: {uploaded_file.id}")
+            
+            # Using the document understanding capability with the signed URL
+            messages = [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
                         {
-                            "type": "image_url", 
-                            "image_url": {"url": f"data:{mime_type};base64,{base64_encoded}"}
+                            "type": "text",
+                            "text": EXTRACTION_QUERY
+                        },
+                        {
+                            "type": "document_url",
+                            "document_url": signed_url.url
                         }
                     ]
                 }
-            ],
-            "max_tokens": 2000
-        }
-        
-        # For now, let's simplify and focus on getting a valid response structure
-        # We'll implement actual image handling once we understand the Mistral API expectations better
-        
-        # Debug the payload structure (without the actual base64 content)
-        debug_payload = payload.copy()
-        if "messages" in debug_payload and debug_payload["messages"]:
-            for msg_idx, msg in enumerate(debug_payload["messages"]):
-                if "content" in msg and isinstance(msg["content"], list):
-                    for content_idx, content_item in enumerate(msg["content"]):
-                        if isinstance(content_item, dict) and "image_url" in content_item:
-                            debug_payload["messages"][msg_idx]["content"][content_idx]["image_url"]["url"] = "[BASE64_DATA]"
-        
-        print(f"Mistral API payload structure: {json.dumps(debug_payload, indent=2)[:500]}...")
-        
-        # Make API request with a timeout to avoid hanging indefinitely
-        # Default to 30 seconds, can be adjusted based on expected response times
-        timeout = 30  # seconds
-        print(f"Making request to Mistral API with {timeout}s timeout...")
-        
-        response = requests.post(
-            "https://api.mistral.ai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=timeout
-        )
-        
-        # Parse response and add detailed logging
-        if response.status_code != 200:
-            print(f"Mistral API error - Status code: {response.status_code}")
-            print(f"Response: {response.text[:500]}...")
-            raise ValueError(f"Mistral API error - Status code: {response.status_code}, Response: {response.text[:100]}...")
+            ]
             
-        try:
-            response_data = response.json()
-        except Exception as e:
-            print(f"Failed to parse Mistral response as JSON: {str(e)}")
-            print(f"Raw response: {response.text[:500]}...")
-            raise ValueError(f"Failed to parse Mistral response as JSON: {str(e)}")
-        
-        print(f"Mistral response status: {response.status_code}")
-        print(f"Mistral response contains: {', '.join(response_data.keys())}")
-        
-        if "choices" not in response_data or not response_data["choices"]:
-            print(f"Invalid Mistral response: {json.dumps(response_data)[:500]}...")
-            raise ValueError("Invalid response from Mistral API: No choices in response")
-        
-        # Get the response text
-        if not response_data["choices"][0]["message"]["content"]:
-            print("WARNING: Empty content from Mistral AI")
-            error_response = {
-                "vendorName": "",
-                "vendorAddress": "",
-                "vendorContact": "",
-                "clientName": "",
-                "clientAddress": "",
-                "invoiceNumber": "",
-                "totalAmount": 0,
-                "currency": "",
-                "paymentTerms": "",
-                "paymentMethod": "",
-                "lineItems": [],
-                "handwrittenNotes": [],
-                "additionalInfo": "",
-                "confidenceScores": {
-                    "overall": 80,
-                    "vendorInfo": 80,
-                    "invoiceDetails": 80,
-                    "lineItems": 80,
-                    "totals": 80,
-                    "handwrittenNotes": 50,
-                    "fieldSpecific": {}
-                },
-                "layoutData": [],
-                "processingMetadata": {
-                    "ocrEngine": "mistral",
-                    "processingTime": 0,
-                    "processingTimestamp": datetime.now().isoformat(),
-                    "documentClassification": "invoice",
-                    "error": "Empty response from Mistral AI"
-                }
-            }
+            # Use an appropriate model for document understanding
+            chat_response = client.chat.complete(
+                model="mistral-small-latest",  # or mistral-medium-latest for better accuracy
+                messages=messages
+            )
             
-            # Generate markdown output for error case
-            markdown_output = generate_markdown_from_extraction(error_response)
-            error_response["markdownOutput"] = markdown_output
-            
-            return json.dumps(error_response)
-            
-        # Log the raw response content for debugging
-        raw_content = response_data["choices"][0]["message"]["content"]
-        print(f"Mistral raw response (first 100 chars): {raw_content[:100]}...")
-        
-        result = raw_content.strip()
-        
-        # Enhanced JSON extraction logic
-        # First try to find JSON within markdown code blocks
-        import re
-        json_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
-        json_matches = re.findall(json_pattern, result)
-        
-        if json_matches:
-            # Use the first JSON block found
-            result = json_matches[0].strip()
+            # Clean up by deleting the uploaded file
+            try:
+                client.files.delete(file_id=uploaded_file.id)
+                print(f"Successfully deleted file {uploaded_file.id} from Mistral")
+            except Exception as e:
+                print(f"Warning: Could not delete file {uploaded_file.id} from Mistral: {str(e)}")
+                
         else:
-            # Try to find JSON with opening/closing braces if no code blocks found
-            brace_pattern = r'(\{[\s\S]*\})'
-            brace_matches = re.findall(brace_pattern, result)
-            if brace_matches:
-                result = brace_matches[0].strip()
-            else:
-                # No JSON found
-                result = result.strip()
+            # For images and other formats, use base64 encoding
+            print("Processing image file with Mistral service...")
+            
+            # Convert file to base64
+            base64_image = base64.b64encode(file_content).decode('utf-8')
+            data_uri = f"data:{content_type};base64,{base64_image}"
+            
+            # Create messages for chat completion
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": EXTRACTION_QUERY
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": data_uri
+                            }
+                        }
+                    ]
+                }
+            ]
+            
+            # Use an appropriate model for image understanding
+            chat_response = client.chat.complete(
+                model="mistral-small-latest",  # or mistral-medium-latest
+                messages=messages
+            )
         
-        # Additional cleanup to ensure we have valid JSON
-        if result.startswith('```'):
-            result = result.lstrip('`')
-        if result.endswith('```'):
-            result = result.rstrip('`')
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
+        print(f"Mistral processing completed in {processing_time:.2f} seconds")
+        
+        # Get the extracted text from the response
+        if not hasattr(chat_response, 'choices') or not chat_response.choices:
+            print("WARNING: Empty content from Mistral AI")
+            error_resp = create_error_response("Empty response from Mistral AI", processing_time)
+            return json.dumps(error_resp)
+            
+        # Extract the content from the response
+        extracted_text = chat_response.choices[0].message.content
+        if not extracted_text:
+            print("WARNING: Empty content from Mistral AI")
+            error_resp = create_error_response("Empty content from Mistral AI", processing_time)
+            return json.dumps(error_resp)
+            
+        print(f"Received response from Mistral: {len(extracted_text)} chars")
+        
+        # Extract JSON from the response text
+        result = extract_json_from_text(extracted_text)
         
         # Validate JSON format
         try:
@@ -364,7 +403,7 @@ def extract_invoice_data(file_content, content_type):
             if "handwrittenNotes" not in parsed_json:
                 parsed_json["handwrittenNotes"] = []
                 
-            # Create a standardized response structure based on template - match EXACTLY the structure in json_mistral.json
+            # Create a standardized response structure based on template
             standardized_response = {
                 "vendorName": parsed_json.get("vendorName", ""),
                 "vendorAddress": parsed_json.get("vendorAddress", ""),
@@ -372,7 +411,12 @@ def extract_invoice_data(file_content, content_type):
                 "clientName": parsed_json.get("clientName", ""),
                 "clientAddress": parsed_json.get("clientAddress", ""),
                 "invoiceNumber": parsed_json.get("invoiceNumber", ""),
+                "invoiceDate": parsed_json.get("invoiceDate", ""),
+                "dueDate": parsed_json.get("dueDate", ""),
                 "totalAmount": parsed_json.get("totalAmount", 0),
+                "subtotalAmount": parsed_json.get("subtotalAmount", 0),
+                "taxAmount": parsed_json.get("taxAmount", 0),
+                "discountAmount": parsed_json.get("discountAmount", 0),
                 "currency": parsed_json.get("currency", ""),
                 "paymentTerms": parsed_json.get("paymentTerms", ""),
                 "paymentMethod": parsed_json.get("paymentMethod", ""),
@@ -380,18 +424,18 @@ def extract_invoice_data(file_content, content_type):
                 "handwrittenNotes": parsed_json.get("handwrittenNotes", []),
                 "additionalInfo": parsed_json.get("additionalInfo", ""),
                 "confidenceScores": {
-                    "overall": 80,
-                    "vendorInfo": 80,
-                    "invoiceDetails": 80,
-                    "lineItems": 80,
-                    "totals": 80,
-                    "handwrittenNotes": 50,
+                    "overall": 85,
+                    "vendorInfo": 85,
+                    "invoiceDetails": 85,
+                    "lineItems": 85,
+                    "totals": 85,
+                    "handwrittenNotes": 70,
                     "fieldSpecific": {}
                 },
                 "layoutData": [],
                 "processingMetadata": {
                     "ocrEngine": "mistral",
-                    "processingTime": 0,
+                    "processingTime": processing_time,
                     "processingTimestamp": datetime.now().isoformat(),
                     "documentClassification": "invoice"
                 }
@@ -405,165 +449,12 @@ def extract_invoice_data(file_content, content_type):
             
         except json.JSONDecodeError as e:
             print(f"Mistral JSON decode error: {str(e)}")
-            # If not valid JSON, create a basic JSON structure with standardized format
-            # Match EXACTLY the format in json_mistral.json example for the error case
-            error_response = {
-                "vendorName": "",
-                "vendorAddress": "",
-                "vendorContact": "",
-                "clientName": "",
-                "clientAddress": "",
-                "invoiceNumber": "",
-                "totalAmount": 0,
-                "currency": "",
-                "paymentTerms": "",
-                "paymentMethod": "",
-                "lineItems": [],
-                "handwrittenNotes": [],
-                "additionalInfo": "",
-                "confidenceScores": {
-                    "overall": 80,
-                    "vendorInfo": 80,
-                    "invoiceDetails": 80,
-                    "lineItems": 80,
-                    "totals": 80,
-                    "handwrittenNotes": 50,
-                    "fieldSpecific": {}
-                },
-                "layoutData": [],
-                "processingMetadata": {
-                    "ocrEngine": "mistral",
-                    "processingTime": 0,
-                    "processingTimestamp": datetime.now().isoformat(),
-                    "documentClassification": "invoice",
-                    "error": f"Failed to parse JSON from Mistral response: {str(e)}"
-                }
-            }
-            
-            # Generate markdown output for error case
-            markdown_output = generate_markdown_from_extraction(error_response)
-            error_response["markdownOutput"] = markdown_output
-            
-            return json.dumps(error_response)
+            error_resp = create_error_response(f"Failed to parse JSON from Mistral response: {str(e)}", processing_time)
+            return json.dumps(error_resp)
         
-    except requests.exceptions.Timeout:
-        print("Mistral API request timed out")
-        error_response = {
-            "vendorName": "",
-            "vendorAddress": "",
-            "vendorContact": "",
-            "clientName": "",
-            "clientAddress": "",
-            "invoiceNumber": "",
-            "totalAmount": 0,
-            "currency": "",
-            "paymentTerms": "",
-            "paymentMethod": "",
-            "lineItems": [],
-            "handwrittenNotes": [],
-            "additionalInfo": "",
-            "confidenceScores": {
-                "overall": 80,
-                "vendorInfo": 80,
-                "invoiceDetails": 80,
-                "lineItems": 80,
-                "totals": 80,
-                "handwrittenNotes": 50,
-                "fieldSpecific": {}
-            },
-            "layoutData": [],
-            "processingMetadata": {
-                "ocrEngine": "mistral",
-                "processingTime": 0,
-                "processingTimestamp": datetime.now().isoformat(),
-                "documentClassification": "invoice",
-                "error": "Mistral API request timed out after 30 seconds"
-            }
-        }
-        
-        # Generate markdown output for error case
-        markdown_output = generate_markdown_from_extraction(error_response)
-        error_response["markdownOutput"] = markdown_output
-        
-        return json.dumps(error_response)
-    except requests.exceptions.ConnectionError:
-        print("Mistral API connection error")
-        error_response = {
-            "vendorName": "",
-            "vendorAddress": "",
-            "vendorContact": "",
-            "clientName": "",
-            "clientAddress": "",
-            "invoiceNumber": "",
-            "totalAmount": 0,
-            "currency": "",
-            "paymentTerms": "",
-            "paymentMethod": "",
-            "lineItems": [],
-            "handwrittenNotes": [],
-            "additionalInfo": "",
-            "confidenceScores": {
-                "overall": 80,
-                "vendorInfo": 80,
-                "invoiceDetails": 80,
-                "lineItems": 80,
-                "totals": 80,
-                "handwrittenNotes": 50,
-                "fieldSpecific": {}
-            },
-            "layoutData": [],
-            "processingMetadata": {
-                "ocrEngine": "mistral",
-                "processingTime": 0,
-                "processingTimestamp": datetime.now().isoformat(),
-                "documentClassification": "invoice",
-                "error": "Failed to connect to Mistral API: connection error"
-            }
-        }
-        
-        # Generate markdown output for error case
-        markdown_output = generate_markdown_from_extraction(error_response)
-        error_response["markdownOutput"] = markdown_output
-        
-        return json.dumps(error_response)
     except Exception as e:
+        processing_time = (datetime.now() - start_time).total_seconds()
         error_message = str(e)
-        print(f"Mistral API general error: {error_message}")
-        error_response = {
-            "vendorName": "",
-            "vendorAddress": "",
-            "vendorContact": "",
-            "clientName": "",
-            "clientAddress": "",
-            "invoiceNumber": "",
-            "totalAmount": 0,
-            "currency": "",
-            "paymentTerms": "",
-            "paymentMethod": "",
-            "lineItems": [],
-            "handwrittenNotes": [],
-            "additionalInfo": "",
-            "confidenceScores": {
-                "overall": 80,
-                "vendorInfo": 80,
-                "invoiceDetails": 80,
-                "lineItems": 80,
-                "totals": 80,
-                "handwrittenNotes": 50,
-                "fieldSpecific": {}
-            },
-            "layoutData": [],
-            "processingMetadata": {
-                "ocrEngine": "mistral",
-                "processingTime": 0,
-                "processingTimestamp": datetime.now().isoformat(),
-                "documentClassification": "invoice",
-                "error": f"Mistral API error: {error_message}"
-            }
-        }
-        
-        # Generate markdown output for error case
-        markdown_output = generate_markdown_from_extraction(error_response)
-        error_response["markdownOutput"] = markdown_output
-        
-        return json.dumps(error_response)
+        print(f"Mistral AI service error: {error_message}")
+        error_resp = create_error_response(f"Mistral AI service error: {error_message}", processing_time)
+        return json.dumps(error_resp)
