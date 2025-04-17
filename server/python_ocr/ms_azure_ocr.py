@@ -53,11 +53,22 @@ def extract_invoice_data(file_content):
         raise ValueError("Azure Document Intelligence endpoint not found in environment variables")
     
     try:
+        # Check if the key is mistakenly set as a URL
+        if AZURE_DOC_INTELLIGENCE_KEY and (AZURE_DOC_INTELLIGENCE_KEY.startswith('http://') or AZURE_DOC_INTELLIGENCE_KEY.startswith('https://')):
+            print(f"Warning: AZURE_DOC_INTELLIGENCE_KEY appears to be a URL instead of a key")
+            raise ValueError("Azure Document Intelligence key appears to be a URL instead of an API key")
+            
+        # Check if the endpoint is properly formatted
+        if not AZURE_DOC_INTELLIGENCE_ENDPOINT.startswith('https://'):
+            print(f"Warning: AZURE_DOC_INTELLIGENCE_ENDPOINT is not a valid HTTPS URL")
+            raise ValueError("Azure Document Intelligence endpoint must be a valid HTTPS URL")
+        
         # Use REST API directly instead of SDK to avoid dependency issues
         analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
         
         # Log the endpoint for debugging (without the sensitive key)
         print(f"Using Azure Document Intelligence endpoint: {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
+        print(f"Using analyze URL: {analyze_url}")
         
         headers = {
             "Content-Type": "application/octet-stream",

@@ -103,18 +103,60 @@ def extract_invoice_data(file_content, content_type):
         # Get the response text
         result = response.choices[0].message.content.strip()
         
-        # Ensure it's a valid JSON (remove any markdown formatting)
-        if result.startswith("```json"):
-            result = result.replace("```json", "", 1)
-        if result.endswith("```"):
-            result = result.rsplit("```", 1)[0]
-            
-        result = result.strip()
+        # Enhanced JSON extraction logic
+        # First try to find JSON within markdown code blocks
+        import re
+        json_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+        json_matches = re.findall(json_pattern, result)
+        
+        if json_matches:
+            # Use the first JSON block found
+            result = json_matches[0].strip()
+        else:
+            # Try to find JSON with opening/closing braces if no code blocks found
+            brace_pattern = r'(\{[\s\S]*\})'
+            brace_matches = re.findall(brace_pattern, result)
+            if brace_matches:
+                result = brace_matches[0].strip()
+            else:
+                # No JSON found
+                result = result.strip()
+        
+        # Additional cleanup to ensure we have valid JSON
+        if result.startswith('```'):
+            result = result.lstrip('`')
+        if result.endswith('```'):
+            result = result.rstrip('`')
         
         # Validate JSON format
         try:
-            json.loads(result)
-        except json.JSONDecodeError:
+            # Log the response for debugging
+            print("Extracted JSON candidate:", result[:100] + "..." if len(result) > 100 else result)
+            parsed_json = json.loads(result)
+            
+            # Ensure we have the minimum required fields
+            required_fields = ["vendorName", "invoiceNumber", "totalAmount"]
+            missing_fields = [field for field in required_fields if field not in parsed_json]
+            
+            if missing_fields:
+                print(f"JSON missing required fields: {missing_fields}")
+                # Add missing fields with default values
+                for field in missing_fields:
+                    if field == "totalAmount":
+                        parsed_json[field] = 0
+                    else:
+                        parsed_json[field] = "Unknown"
+            
+            # Ensure lineItems and handwrittenNotes exist
+            if "lineItems" not in parsed_json:
+                parsed_json["lineItems"] = []
+            if "handwrittenNotes" not in parsed_json:
+                parsed_json["handwrittenNotes"] = []
+                
+            return json.dumps(parsed_json)
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {str(e)}")
             # If not valid JSON, create a basic JSON structure
             return json.dumps({
                 "vendorName": "Could not extract vendor name",
@@ -122,10 +164,8 @@ def extract_invoice_data(file_content, content_type):
                 "totalAmount": 0,
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": "Failed to parse JSON from OpenAI response"
+                "error": f"Failed to parse JSON from OpenAI response: {str(e)}"
             })
-        
-        return result
         
     except Exception as e:
         error_message = str(e)
