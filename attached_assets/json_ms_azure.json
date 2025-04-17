@@ -25,8 +25,9 @@
   "processingMetadata": {
     "ocrEngine": "ms-document-intelligence",
     "processingTime": 0,
-    "processingTimestamp": "2025-04-17T09:29:08.407Z",
-    "documentClassification": "invoice"
+    "processingTimestamp": "2025-04-17T09:46:38.941330",
+    "documentClassification": "invoice",
+    "error": "Azure Document Intelligence error: Azure Document Intelligence key appears to be a URL instead of an API key"
   },
   "markdownOutput": "# Invoice Extraction Result\n\n## Vendor Information\n- **Vendor Name**: N/A\n- **Vendor Address**: N/A\n- **Vendor Contact**: N/A\n\n## Invoice Details\n- **Invoice Number**: N/A\n- **Invoice Date**: N/A\n- **Due Date**: N/A\n\n## Line Items\n\nNo line items found.\n\n## Totals\n- **Subtotal**: N/A\n- **Tax**: N/A\n- **Discount**: N/A\n- **Total**: N/A"
 }

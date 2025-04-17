@@ -376,7 +376,7 @@ def extract_invoice_data(file_content):
             "handwrittenNotes": 0.0  # Azure doesn't explicitly handle handwritten notes
         }
         
-        # Create a standardized response structure
+        # Create a standardized response structure - match EXACTLY the format in json_ms_azure.json
         standardized_response = {
             "vendorName": extracted_data.get("vendorName", ""),
             "vendorAddress": extracted_data.get("vendorAddress", ""),
@@ -384,11 +384,7 @@ def extract_invoice_data(file_content):
             "clientName": extracted_data.get("clientName", ""),
             "clientAddress": extracted_data.get("clientAddress", ""),
             "invoiceNumber": extracted_data.get("invoiceNumber", ""),
-            "invoiceDate": extracted_data.get("invoiceDate", None),
-            "dueDate": extracted_data.get("dueDate", None),
             "totalAmount": extracted_data.get("totalAmount", 0),
-            "subtotalAmount": extracted_data.get("subtotalAmount", 0),
-            "taxAmount": extracted_data.get("taxAmount", 0),
             "currency": extracted_data.get("currency", ""),
             "paymentTerms": "",
             "paymentMethod": "",

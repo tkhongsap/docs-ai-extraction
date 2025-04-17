@@ -25,8 +25,9 @@
   "processingMetadata": {
     "ocrEngine": "mistral",
     "processingTime": 0,
-    "processingTimestamp": "2025-04-17T09:22:12.581Z",
-    "documentClassification": "invoice"
+    "processingTimestamp": "2025-04-17T09:49:54.480579",
+    "documentClassification": "invoice",
+    "error": "Mistral API error: Mistral API error - Status code: 422, Response: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\"],\"msg\":\"Value error, Image content must be a URL (sta..."
   },
   "markdownOutput": "# Invoice Extraction Result\n\n## Vendor Information\n- **Vendor Name**: N/A\n- **Vendor Address**: N/A\n- **Vendor Contact**: N/A\n\n## Invoice Details\n- **Invoice Number**: N/A\n- **Invoice Date**: N/A\n- **Due Date**: N/A\n\n## Line Items\n\nNo line items found.\n\n## Totals\n- **Subtotal**: N/A\n- **Tax**: N/A\n- **Discount**: N/A\n- **Total**: N/A"
 }

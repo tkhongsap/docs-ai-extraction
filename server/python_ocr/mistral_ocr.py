@@ -361,7 +361,7 @@ def extract_invoice_data(file_content, content_type):
             if "handwrittenNotes" not in parsed_json:
                 parsed_json["handwrittenNotes"] = []
                 
-            # Create a standardized response structure based on template
+            # Create a standardized response structure based on template - match EXACTLY the structure in json_mistral.json
             standardized_response = {
                 "vendorName": parsed_json.get("vendorName", ""),
                 "vendorAddress": parsed_json.get("vendorAddress", ""),
@@ -369,11 +369,7 @@ def extract_invoice_data(file_content, content_type):
                 "clientName": parsed_json.get("clientName", ""),
                 "clientAddress": parsed_json.get("clientAddress", ""),
                 "invoiceNumber": parsed_json.get("invoiceNumber", ""),
-                "invoiceDate": parsed_json.get("invoiceDate", None),
-                "dueDate": parsed_json.get("dueDate", None),
                 "totalAmount": parsed_json.get("totalAmount", 0),
-                "subtotalAmount": parsed_json.get("subtotalAmount", 0),
-                "taxAmount": parsed_json.get("taxAmount", 0),
                 "currency": parsed_json.get("currency", ""),
                 "paymentTerms": parsed_json.get("paymentTerms", ""),
                 "paymentMethod": parsed_json.get("paymentMethod", ""),
@@ -407,6 +403,7 @@ def extract_invoice_data(file_content, content_type):
         except json.JSONDecodeError as e:
             print(f"Mistral JSON decode error: {str(e)}")
             # If not valid JSON, create a basic JSON structure with standardized format
+            # Match EXACTLY the format in json_mistral.json example for the error case
             error_response = {
                 "vendorName": "",
                 "vendorAddress": "",
