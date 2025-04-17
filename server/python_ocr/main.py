@@ -145,31 +145,50 @@ async def process_with_openai(file: UploadFile = File(...)):
             except Exception as pdf_err:
                 raise HTTPException(status_code=400, detail=f"Error converting PDF: {str(pdf_err)}")
         
-        # Process with OpenAI
-        extracted_data = openai_extract(processed_content, processed_content_type)
-        
-        # Log the raw response for debugging
-        print(f"OpenAI raw response from main.py: {extracted_data[:200]}...")
-        
-        # Try to parse JSON from response
+        # Process with OpenAI - wrap in additional try-except
         try:
-            json_data = json.loads(extracted_data)
-            return JSONResponse(content=json_data)
-        except json.JSONDecodeError as e:
-            print(f"JSON decode error in main.py: {str(e)}")
+            extracted_data = openai_extract(processed_content, processed_content_type)
             
-            # Create a default response with error details
-            default_response = {
-                "vendorName": "Could not extract vendor name",
-                "invoiceNumber": "Unknown",
+            # Log the raw response for debugging
+            print(f"OpenAI raw response from main.py: {extracted_data[:200]}...")
+            
+            # Try to parse JSON from response
+            try:
+                json_data = json.loads(extracted_data)
+                return JSONResponse(content=json_data)
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error in main.py: {str(e)}")
+                
+                # Create a default response with error details
+                default_response = {
+                    "vendorName": "Could not extract vendor name",
+                    "invoiceNumber": "Unknown",
+                    "totalAmount": 0,
+                    "lineItems": [],
+                    "handwrittenNotes": [],
+                    "error": f"Failed to parse OpenAI response: {str(e)}",
+                    "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+                }
+                
+                return JSONResponse(content=default_response)
+        except Exception as service_error:
+            # Handle any errors from the OCR service
+            print(f"OpenAI service error: {str(service_error)}")
+            
+            # Create a structured error response
+            error_response = {
+                "vendorName": "Error occurred",
+                "invoiceNumber": "Error",
                 "totalAmount": 0,
+                "currency": "Unknown",
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": f"Failed to parse OpenAI response: {str(e)}",
-                "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+                "error": f"OpenAI OCR service error: {str(service_error)}",
+                "status": "error",
+                "confidence": 0
             }
             
-            return JSONResponse(content=default_response)
+            return JSONResponse(content=error_response)
         
     except HTTPException:
         raise  # Reraise HTTP exceptions
@@ -212,31 +231,50 @@ async def process_with_mistral(file: UploadFile = File(...)):
             # Keep PDF as is for Mistral, as it supports PDF directly
             pass
         
-        # Process with Mistral
-        extracted_data = mistral_extract(processed_content, processed_content_type)
-        
-        # Log the raw response for debugging
-        print(f"Mistral raw response from main.py: {extracted_data[:200]}...")
-        
-        # Try to parse JSON from response
+        # Process with Mistral - wrap in additional try-except
         try:
-            json_data = json.loads(extracted_data)
-            return JSONResponse(content=json_data)
-        except json.JSONDecodeError as e:
-            print(f"JSON decode error in main.py (Mistral): {str(e)}")
+            extracted_data = mistral_extract(processed_content, processed_content_type)
             
-            # Create a default response with error details
-            default_response = {
-                "vendorName": "Could not extract vendor name",
-                "invoiceNumber": "Unknown",
+            # Log the raw response for debugging
+            print(f"Mistral raw response from main.py: {extracted_data[:200]}...")
+            
+            # Try to parse JSON from response
+            try:
+                json_data = json.loads(extracted_data)
+                return JSONResponse(content=json_data)
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error in main.py (Mistral): {str(e)}")
+                
+                # Create a default response with error details
+                default_response = {
+                    "vendorName": "Could not extract vendor name",
+                    "invoiceNumber": "Unknown",
+                    "totalAmount": 0,
+                    "lineItems": [],
+                    "handwrittenNotes": [],
+                    "error": f"Failed to parse Mistral response: {str(e)}",
+                    "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+                }
+                
+                return JSONResponse(content=default_response)
+        except Exception as service_error:
+            # Handle any errors from the OCR service
+            print(f"Mistral service error: {str(service_error)}")
+            
+            # Create a structured error response
+            error_response = {
+                "vendorName": "Error occurred",
+                "invoiceNumber": "Error",
                 "totalAmount": 0,
+                "currency": "Unknown",
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": f"Failed to parse Mistral response: {str(e)}",
-                "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+                "error": f"Mistral OCR service error: {str(service_error)}",
+                "status": "error",
+                "confidence": 0
             }
             
-            return JSONResponse(content=default_response)
+            return JSONResponse(content=error_response)
         
     except HTTPException:
         raise  # Reraise HTTP exceptions
@@ -267,20 +305,51 @@ async def process_with_azure(file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             f.write(file_content)
         
-        # Process with Azure (no need to convert PDF)
-        extracted_data = azure_extract(file_content)
-        
-        # Try to parse JSON from response if not already JSON
-        if isinstance(extracted_data, str):
-            try:
-                json_data = json.loads(extracted_data)
-                return JSONResponse(content=json_data)
-            except json.JSONDecodeError:
-                # If not JSON, return raw text
-                return JSONResponse(content={"result": extracted_data})
-        else:
-            # If already parsed, return as is
-            return JSONResponse(content=extracted_data)
+        # Process with Azure (no need to convert PDF) - wrap in additional try-except
+        try:
+            extracted_data = azure_extract(file_content)
+            
+            # Log the raw response for debugging (first 200 chars)
+            print(f"Azure raw response from main.py: {str(extracted_data)[:200]}...")
+            
+            # Try to parse JSON from response if not already JSON
+            if isinstance(extracted_data, str):
+                try:
+                    json_data = json.loads(extracted_data)
+                    return JSONResponse(content=json_data)
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error in main.py (Azure): {str(e)}")
+                    # If not JSON, return raw text with error details
+                    return JSONResponse(content={
+                        "vendorName": "Could not extract vendor name",
+                        "invoiceNumber": "Unknown",
+                        "totalAmount": 0,
+                        "lineItems": [],
+                        "handwrittenNotes": [],
+                        "error": f"Failed to parse Azure response: {str(e)}",
+                        "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
+                    })
+            else:
+                # If already parsed, return as is
+                return JSONResponse(content=extracted_data)
+        except Exception as service_error:
+            # Handle any errors from the Azure OCR service
+            print(f"Azure service error: {str(service_error)}")
+            
+            # Create a structured error response
+            error_response = {
+                "vendorName": "Error occurred",
+                "invoiceNumber": "Error",
+                "totalAmount": 0,
+                "currency": "Unknown",
+                "lineItems": [],
+                "handwrittenNotes": [],
+                "error": f"Azure OCR service error: {str(service_error)}",
+                "status": "error",
+                "confidence": 0
+            }
+            
+            return JSONResponse(content=error_response)
         
     except HTTPException:
         raise  # Reraise HTTP exceptions

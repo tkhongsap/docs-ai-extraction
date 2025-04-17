@@ -113,6 +113,11 @@ def extract_invoice_data(file_content, content_type):
                 raise TimeoutError(f"OpenAI API request timed out after {timeout} seconds")
             raise
         
+        # Detailed response debugging
+        print(f"OpenAI response object type: {type(response)}")
+        print(f"OpenAI response attributes: {dir(response)[:20]}...")
+        print(f"OpenAI response representation: {repr(response)[:200]}...")
+        
         # Get the response text
         if not response.choices or not response.choices[0].message.content:
             print("WARNING: Empty response from OpenAI")
@@ -127,7 +132,9 @@ def extract_invoice_data(file_content, content_type):
             
         # Log the raw response content for debugging
         raw_content = response.choices[0].message.content
-        print(f"OpenAI raw response (first 100 chars): {raw_content[:100]}...")
+        print(f"OpenAI raw response full: {raw_content}")
+        print(f"OpenAI raw response type: {type(raw_content)}")
+        print(f"OpenAI raw response first 100 chars: {raw_content[:100]}...")
         
         result = raw_content.strip()
         
