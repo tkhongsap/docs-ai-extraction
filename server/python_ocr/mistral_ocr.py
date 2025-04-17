@@ -124,27 +124,98 @@ def extract_invoice_data(file_content, content_type):
             json=payload
         )
         
-        # Parse response
-        response_data = response.json()
+        # Parse response and add detailed logging
+        if response.status_code != 200:
+            print(f"Mistral API error - Status code: {response.status_code}")
+            print(f"Response: {response.text[:500]}...")
+            raise ValueError(f"Mistral API error - Status code: {response.status_code}, Response: {response.text[:100]}...")
+            
+        try:
+            response_data = response.json()
+        except Exception as e:
+            print(f"Failed to parse Mistral response as JSON: {str(e)}")
+            print(f"Raw response: {response.text[:500]}...")
+            raise ValueError(f"Failed to parse Mistral response as JSON: {str(e)}")
+        
+        print(f"Mistral response status: {response.status_code}")
+        print(f"Mistral response contains: {', '.join(response_data.keys())}")
         
         if "choices" not in response_data or not response_data["choices"]:
-            raise ValueError("Invalid response from Mistral API")
+            print(f"Invalid Mistral response: {json.dumps(response_data)[:500]}...")
+            raise ValueError("Invalid response from Mistral API: No choices in response")
         
         # Get the response text
-        result = response_data["choices"][0]["message"]["content"].strip()
-        
-        # Ensure it's a valid JSON (remove any markdown formatting)
-        if result.startswith("```json"):
-            result = result.replace("```json", "", 1)
-        if result.endswith("```"):
-            result = result.rsplit("```", 1)[0]
+        if not response_data["choices"][0]["message"]["content"]:
+            print("WARNING: Empty content from Mistral AI")
+            return json.dumps({
+                "vendorName": "Could not extract vendor name",
+                "invoiceNumber": "Unknown",
+                "totalAmount": 0,
+                "lineItems": [],
+                "handwrittenNotes": [],
+                "error": "Empty response from Mistral AI"
+            })
             
-        result = result.strip()
+        # Log the raw response content for debugging
+        raw_content = response_data["choices"][0]["message"]["content"]
+        print(f"Mistral raw response (first 100 chars): {raw_content[:100]}...")
+        
+        result = raw_content.strip()
+        
+        # Enhanced JSON extraction logic
+        # First try to find JSON within markdown code blocks
+        import re
+        json_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+        json_matches = re.findall(json_pattern, result)
+        
+        if json_matches:
+            # Use the first JSON block found
+            result = json_matches[0].strip()
+        else:
+            # Try to find JSON with opening/closing braces if no code blocks found
+            brace_pattern = r'(\{[\s\S]*\})'
+            brace_matches = re.findall(brace_pattern, result)
+            if brace_matches:
+                result = brace_matches[0].strip()
+            else:
+                # No JSON found
+                result = result.strip()
+        
+        # Additional cleanup to ensure we have valid JSON
+        if result.startswith('```'):
+            result = result.lstrip('`')
+        if result.endswith('```'):
+            result = result.rstrip('`')
         
         # Validate JSON format
         try:
-            json.loads(result)
-        except json.JSONDecodeError:
+            # Log the response for debugging
+            print("Mistral extracted JSON candidate:", result[:100] + "..." if len(result) > 100 else result)
+            parsed_json = json.loads(result)
+            
+            # Ensure we have the minimum required fields
+            required_fields = ["vendorName", "invoiceNumber", "totalAmount"]
+            missing_fields = [field for field in required_fields if field not in parsed_json]
+            
+            if missing_fields:
+                print(f"Mistral JSON missing required fields: {missing_fields}")
+                # Add missing fields with default values
+                for field in missing_fields:
+                    if field == "totalAmount":
+                        parsed_json[field] = 0
+                    else:
+                        parsed_json[field] = "Unknown"
+            
+            # Ensure lineItems and handwrittenNotes exist
+            if "lineItems" not in parsed_json:
+                parsed_json["lineItems"] = []
+            if "handwrittenNotes" not in parsed_json:
+                parsed_json["handwrittenNotes"] = []
+                
+            return json.dumps(parsed_json)
+            
+        except json.JSONDecodeError as e:
+            print(f"Mistral JSON decode error: {str(e)}")
             # If not valid JSON, create a basic JSON structure
             return json.dumps({
                 "vendorName": "Could not extract vendor name",
@@ -152,10 +223,8 @@ def extract_invoice_data(file_content, content_type):
                 "totalAmount": 0,
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": "Failed to parse JSON from Mistral response"
+                "error": f"Failed to parse JSON from Mistral response: {str(e)}"
             })
-        
-        return result
         
     except Exception as e:
         error_message = str(e)

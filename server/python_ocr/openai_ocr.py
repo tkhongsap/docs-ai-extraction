@@ -101,7 +101,22 @@ def extract_invoice_data(file_content, content_type):
         )
         
         # Get the response text
-        result = response.choices[0].message.content.strip()
+        if not response.choices or not response.choices[0].message.content:
+            print("WARNING: Empty response from OpenAI")
+            return json.dumps({
+                "vendorName": "Could not extract vendor name",
+                "invoiceNumber": "Unknown",
+                "totalAmount": 0,
+                "lineItems": [],
+                "handwrittenNotes": [],
+                "error": "Empty response from OpenAI"
+            })
+            
+        # Log the raw response content for debugging
+        raw_content = response.choices[0].message.content
+        print(f"OpenAI raw response (first 100 chars): {raw_content[:100]}...")
+        
+        result = raw_content.strip()
         
         # Enhanced JSON extraction logic
         # First try to find JSON within markdown code blocks
