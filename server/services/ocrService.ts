@@ -147,6 +147,9 @@ export async function processDocument(filePath: string, service: string = 'opena
   console.log(`Processing document with file extension: ${filePath.split('.').pop()} using ${service}`);
 
   try {
+    // Log OCR service selection
+    console.log(`Processing ${service} service...`);
+    
     // Ensure Python OCR server is running
     await pythonOcrService.ensurePythonOcrServerRunning();
     

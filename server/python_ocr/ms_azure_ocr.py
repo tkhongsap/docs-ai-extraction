@@ -17,6 +17,10 @@ AZURE_DOC_INTELLIGENCE_KEY = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY")
 AZURE_DOC_INTELLIGENCE_ENDPOINT = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", 
                                     "https://document-intelligence.cognitiveservices.azure.com/")
 
+# Ensure endpoint ends with a slash
+if AZURE_DOC_INTELLIGENCE_ENDPOINT and not AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
+    AZURE_DOC_INTELLIGENCE_ENDPOINT = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}/"
+
 def format_currency(currency_value):
     """Format currency value from Azure response"""
     if not currency_value:
@@ -51,6 +55,9 @@ def extract_invoice_data(file_content):
     try:
         # Use REST API directly instead of SDK to avoid dependency issues
         analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
+        
+        # Log the endpoint for debugging (without the sensitive key)
+        print(f"Using Azure Document Intelligence endpoint: {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
         
         headers = {
             "Content-Type": "application/octet-stream",
@@ -90,6 +97,7 @@ def extract_invoice_data(file_content):
         import time
         max_retries = 10
         retry_delay = 1  # seconds
+        result = None  # Initialize result to avoid "possibly unbound" error
         
         for retry in range(max_retries):
             result_response = requests.get(operation_location, headers=headers)
@@ -107,6 +115,10 @@ def extract_invoice_data(file_content):
             
             # Wait before polling again
             time.sleep(retry_delay)
+            
+        # If we've exhausted retries without success or failure status
+        if result is None or result.get("status") != "succeeded":
+            raise ValueError("Azure Document Intelligence analysis timed out")
         
         # Extract invoice data from the result
         def serialize_address(address_value):
@@ -233,7 +245,7 @@ def extract_invoice_data(file_content):
             "vendorInfo": 0.90 if extracted_data["vendorName"] else 0.5,
             "invoiceDetails": 0.90 if extracted_data["invoiceNumber"] else 0.5,
             "lineItems": 0.85 if extracted_data["lineItems"] else 0.5,
-            "totals": 0.90 if extracted_data["totalAmount"] > 0 else 0.5,
+            "totals": 0.90 if extracted_data["totalAmount"] and float(extracted_data["totalAmount"]) > 0 else 0.5,
             "handwrittenNotes": 0.0  # Azure doesn't explicitly handle handwritten notes
         }
         
