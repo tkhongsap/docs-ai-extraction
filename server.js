@@ -18,16 +18,49 @@ if (!fs.existsSync('./uploads')) {
   console.log('Created uploads directory');
 }
 
-// Start Python OCR API server using the simpler script
+// Start Python OCR API server using direct module import
 console.log('\nStarting Python OCR API server on port 5006...');
 
+// Change current directory to make imports work correctly
+process.chdir(__dirname);
+
+// Create uploads folder if it doesn't exist
+if (!fs.existsSync('./uploads')) {
+  fs.mkdirSync('./uploads', { recursive: true });
+}
+
+// Launch the Python OCR server with appropriate environment
 const pythonProcess = spawn('python3', 
-  [path.join(__dirname, 'server/python_ocr/start_server.py')], 
+  ['-c', `
+import sys
+import os
+
+# Add the current directory to Python path
+sys.path.insert(0, os.getcwd())
+
+# Try to import and run the FastAPI app
+try:
+    import uvicorn
+    from server.python_ocr.main import app
+    
+    # Print details for debugging
+    print("Python path:", sys.path)
+    print("Current directory:", os.getcwd())
+    print("Starting OCR API on port 5006...")
+    
+    # Run the server
+    uvicorn.run(app, host="0.0.0.0", port=5006)
+except Exception as e:
+    print(f"Error starting OCR API: {e}")
+    import traceback
+    traceback.print_exc()
+`], 
   { 
     stdio: 'inherit',
     env: { 
       ...process.env,
-      OCR_API_PORT: '5006'
+      OCR_API_PORT: '5006',
+      PYTHONPATH: __dirname
     }
   }
 );
