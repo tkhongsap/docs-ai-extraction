@@ -21,6 +21,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  console.log(`Making ${method} request to ${url}`);
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -28,7 +29,14 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  // For 204 No Content responses (common with DELETE operations), return immediately
+  if (res.status === 204) {
+    console.log(`Received 204 No Content from ${url}`);
+    return res;
+  }
+
   await throwIfResNotOk(res);
+  console.log(`Request to ${url} successful with status ${res.status}`);
   return res;
 }
 

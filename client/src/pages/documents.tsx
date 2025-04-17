@@ -68,9 +68,18 @@ export default function Documents() {
   // Mutation for document deletion
   const deleteDocumentMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest('DELETE', `/api/documents/${id}`);
+      console.log(`Attempting to delete document with ID: ${id}`);
+      try {
+        const response = await apiRequest('DELETE', `/api/documents/${id}`);
+        console.log(`Delete request completed with status: ${response.status}`);
+        return response;
+      } catch (error) {
+        console.error(`Error in delete mutation function:`, error);
+        throw error;
+      }
     },
     onSuccess: () => {
+      console.log('Delete mutation succeeded, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
       toast({
         title: "Document Deleted",

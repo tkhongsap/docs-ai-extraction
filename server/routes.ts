@@ -325,21 +325,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete a document
   app.delete("/api/documents/:id", async (req: Request, res: Response) => {
     try {
+      console.log(`[DELETE] Request received to delete document with ID: ${req.params.id}`);
       const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        console.error(`[DELETE] Invalid document ID: ${req.params.id}`);
+        return res.status(400).json({ message: "Invalid document ID" });
+      }
+      
+      console.log(`[DELETE] Fetching document with ID: ${id}`);
       const document = await storage.getDocument(id);
 
       if (!document) {
+        console.log(`[DELETE] Document with ID ${id} not found`);
         return res.status(404).json({ message: "Document not found" });
       }
 
+      console.log(`[DELETE] Found document: ${document.originalFilename}, checking file existence`);
+      
       // Delete the file from storage
       if (fs.existsSync(document.storagePath)) {
+        console.log(`[DELETE] Deleting file: ${document.storagePath}`);
         fs.unlinkSync(document.storagePath);
+      } else {
+        console.log(`[DELETE] File not found at ${document.storagePath}, skipping file deletion`);
       }
 
       // Delete from storage
-      await storage.deleteDocument(id);
+      console.log(`[DELETE] Deleting document from database: ${id}`);
+      const result = await storage.deleteDocument(id);
+      console.log(`[DELETE] Document deletion result: ${result}`);
 
+      console.log(`[DELETE] Successfully deleted document ${id}, sending 204 response`);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting document:", error);
