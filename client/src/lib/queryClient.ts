@@ -2,7 +2,16 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
+    // For responses with content, try to get the error message
+    // For 204 No Content and similar responses, use statusText
+    let text = res.statusText;
+    if (res.status !== 204) {
+      try {
+        text = await res.text() || res.statusText;
+      } catch (err) {
+        console.error("Error reading response body:", err);
+      }
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 }
