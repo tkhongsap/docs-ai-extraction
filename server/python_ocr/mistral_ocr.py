@@ -8,6 +8,7 @@ import os
 import json
 import base64
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -15,6 +16,109 @@ load_dotenv(override=True)
 
 # Get API key from environment
 MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY")
+
+def generate_markdown_from_extraction(data):
+    """
+    Generate a markdown representation of the extracted invoice data
+    
+    Args:
+        data (dict): The extracted invoice data
+        
+    Returns:
+        str: Markdown formatted text
+    """
+    # Initialize markdown content
+    md = ["# Invoice Extraction Result", ""]
+    
+    # Vendor Information section
+    md.append("## Vendor Information")
+    vendor_name = data.get("vendorName", "")
+    vendor_address = data.get("vendorAddress", "")
+    vendor_contact = data.get("vendorContact", "")
+    
+    md.append(f"- **Vendor Name**: {vendor_name if vendor_name else 'N/A'}")
+    md.append(f"- **Vendor Address**: {vendor_address if vendor_address else 'N/A'}")
+    md.append(f"- **Vendor Contact**: {vendor_contact if vendor_contact else 'N/A'}")
+    md.append("")
+    
+    # Invoice Details section
+    md.append("## Invoice Details")
+    invoice_number = data.get("invoiceNumber", "")
+    invoice_date = data.get("invoiceDate", None)
+    due_date = data.get("dueDate", None)
+    
+    # Format dates if they exist
+    invoice_date_str = "N/A"
+    if invoice_date:
+        try:
+            if isinstance(invoice_date, str) and "T" in invoice_date:
+                invoice_date_str = invoice_date.split("T")[0].replace("-", "/")
+            else:
+                invoice_date_str = str(invoice_date)
+        except:
+            invoice_date_str = str(invoice_date)
+    
+    due_date_str = "N/A"
+    if due_date:
+        try:
+            if isinstance(due_date, str) and "T" in due_date:
+                due_date_str = due_date.split("T")[0].replace("-", "/")
+            else:
+                due_date_str = str(due_date)
+        except:
+            due_date_str = str(due_date)
+    
+    md.append(f"- **Invoice Number**: {invoice_number if invoice_number else 'N/A'}")
+    md.append(f"- **Invoice Date**: {invoice_date_str}")
+    md.append(f"- **Due Date**: {due_date_str}")
+    md.append("")
+    
+    # Line Items section
+    md.append("## Line Items")
+    md.append("")
+    
+    line_items = data.get("lineItems", [])
+    if line_items and len(line_items) > 0:
+        # Create table header
+        md.append("| Description | Quantity | Unit Price | Amount |")
+        md.append("| ----------- | -------- | ---------- | ------ |")
+        
+        # Add each line item
+        for item in line_items:
+            description = item.get("description", "")
+            quantity = item.get("quantity", "")
+            unit_price = item.get("unitPrice", "")
+            amount = item.get("amount", "")
+            
+            md.append(f"| {description} | {quantity} | {unit_price} | {amount} |")
+    else:
+        md.append("No line items found.")
+    
+    md.append("")
+    
+    # Totals section
+    md.append("## Totals")
+    subtotal = data.get("subtotalAmount", "N/A")
+    tax = data.get("taxAmount", "N/A")
+    discount = data.get("discountAmount", "N/A")
+    total = data.get("totalAmount", "N/A")
+    
+    md.append(f"- **Subtotal**: {subtotal if subtotal != 'N/A' else 'N/A'}")
+    md.append(f"- **Tax**: {tax if tax != 'N/A' else 'N/A'}")
+    md.append(f"- **Discount**: {discount if discount != 'N/A' else 'N/A'}")
+    md.append(f"- **Total**: {total if total != 'N/A' else 'N/A'}")
+    
+    # Handwritten notes section (if any)
+    handwritten_notes = data.get("handwrittenNotes", [])
+    if handwritten_notes and len(handwritten_notes) > 0:
+        md.append("")
+        md.append("## Handwritten Notes")
+        for i, note in enumerate(handwritten_notes, 1):
+            text = note.get("text", "")
+            md.append(f"{i}. {text}")
+    
+    # Join all lines with newlines
+    return "\n".join(md)
 
 def extract_invoice_data(file_content, content_type):
     """
@@ -162,14 +266,44 @@ def extract_invoice_data(file_content, content_type):
         # Get the response text
         if not response_data["choices"][0]["message"]["content"]:
             print("WARNING: Empty content from Mistral AI")
-            return json.dumps({
-                "vendorName": "Could not extract vendor name",
-                "invoiceNumber": "Unknown",
+            error_response = {
+                "vendorName": "",
+                "vendorAddress": "",
+                "vendorContact": "",
+                "clientName": "",
+                "clientAddress": "",
+                "invoiceNumber": "",
                 "totalAmount": 0,
+                "currency": "",
+                "paymentTerms": "",
+                "paymentMethod": "",
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": "Empty response from Mistral AI"
-            })
+                "additionalInfo": "",
+                "confidenceScores": {
+                    "overall": 80,
+                    "vendorInfo": 80,
+                    "invoiceDetails": 80,
+                    "lineItems": 80,
+                    "totals": 80,
+                    "handwrittenNotes": 50,
+                    "fieldSpecific": {}
+                },
+                "layoutData": [],
+                "processingMetadata": {
+                    "ocrEngine": "mistral",
+                    "processingTime": 0,
+                    "processingTimestamp": datetime.now().isoformat(),
+                    "documentClassification": "invoice",
+                    "error": "Empty response from Mistral AI"
+                }
+            }
+            
+            # Generate markdown output for error case
+            markdown_output = generate_markdown_from_extraction(error_response)
+            error_response["markdownOutput"] = markdown_output
+            
+            return json.dumps(error_response)
             
         # Log the raw response content for debugging
         raw_content = response_data["choices"][0]["message"]["content"]
@@ -227,48 +361,209 @@ def extract_invoice_data(file_content, content_type):
             if "handwrittenNotes" not in parsed_json:
                 parsed_json["handwrittenNotes"] = []
                 
-            return json.dumps(parsed_json)
+            # Create a standardized response structure based on template
+            standardized_response = {
+                "vendorName": parsed_json.get("vendorName", ""),
+                "vendorAddress": parsed_json.get("vendorAddress", ""),
+                "vendorContact": parsed_json.get("vendorContact", ""),
+                "clientName": parsed_json.get("clientName", ""),
+                "clientAddress": parsed_json.get("clientAddress", ""),
+                "invoiceNumber": parsed_json.get("invoiceNumber", ""),
+                "invoiceDate": parsed_json.get("invoiceDate", None),
+                "dueDate": parsed_json.get("dueDate", None),
+                "totalAmount": parsed_json.get("totalAmount", 0),
+                "subtotalAmount": parsed_json.get("subtotalAmount", 0),
+                "taxAmount": parsed_json.get("taxAmount", 0),
+                "currency": parsed_json.get("currency", ""),
+                "paymentTerms": parsed_json.get("paymentTerms", ""),
+                "paymentMethod": parsed_json.get("paymentMethod", ""),
+                "lineItems": parsed_json.get("lineItems", []),
+                "handwrittenNotes": parsed_json.get("handwrittenNotes", []),
+                "additionalInfo": parsed_json.get("additionalInfo", ""),
+                "confidenceScores": {
+                    "overall": 80,
+                    "vendorInfo": 80,
+                    "invoiceDetails": 80,
+                    "lineItems": 80,
+                    "totals": 80,
+                    "handwrittenNotes": 50,
+                    "fieldSpecific": {}
+                },
+                "layoutData": [],
+                "processingMetadata": {
+                    "ocrEngine": "mistral",
+                    "processingTime": 0,
+                    "processingTimestamp": datetime.now().isoformat(),
+                    "documentClassification": "invoice"
+                }
+            }
+            
+            # Generate markdown output
+            markdown_output = generate_markdown_from_extraction(standardized_response)
+            standardized_response["markdownOutput"] = markdown_output
+            
+            return json.dumps(standardized_response)
             
         except json.JSONDecodeError as e:
             print(f"Mistral JSON decode error: {str(e)}")
-            # If not valid JSON, create a basic JSON structure
-            return json.dumps({
-                "vendorName": "Could not extract vendor name",
-                "invoiceNumber": "Unknown",
+            # If not valid JSON, create a basic JSON structure with standardized format
+            error_response = {
+                "vendorName": "",
+                "vendorAddress": "",
+                "vendorContact": "",
+                "clientName": "",
+                "clientAddress": "",
+                "invoiceNumber": "",
                 "totalAmount": 0,
+                "currency": "",
+                "paymentTerms": "",
+                "paymentMethod": "",
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": f"Failed to parse JSON from Mistral response: {str(e)}"
-            })
+                "additionalInfo": "",
+                "confidenceScores": {
+                    "overall": 80,
+                    "vendorInfo": 80,
+                    "invoiceDetails": 80,
+                    "lineItems": 80,
+                    "totals": 80,
+                    "handwrittenNotes": 50,
+                    "fieldSpecific": {}
+                },
+                "layoutData": [],
+                "processingMetadata": {
+                    "ocrEngine": "mistral",
+                    "processingTime": 0,
+                    "processingTimestamp": datetime.now().isoformat(),
+                    "documentClassification": "invoice",
+                    "error": f"Failed to parse JSON from Mistral response: {str(e)}"
+                }
+            }
+            
+            # Generate markdown output for error case
+            markdown_output = generate_markdown_from_extraction(error_response)
+            error_response["markdownOutput"] = markdown_output
+            
+            return json.dumps(error_response)
         
     except requests.exceptions.Timeout:
         print("Mistral API request timed out")
-        return json.dumps({
+        error_response = {
             "vendorName": "",
+            "vendorAddress": "",
+            "vendorContact": "",
+            "clientName": "",
+            "clientAddress": "",
             "invoiceNumber": "",
             "totalAmount": 0,
+            "currency": "",
+            "paymentTerms": "",
+            "paymentMethod": "",
             "lineItems": [],
             "handwrittenNotes": [],
-            "error": "Mistral API request timed out after 30 seconds"
-        })
+            "additionalInfo": "",
+            "confidenceScores": {
+                "overall": 80,
+                "vendorInfo": 80,
+                "invoiceDetails": 80,
+                "lineItems": 80,
+                "totals": 80,
+                "handwrittenNotes": 50,
+                "fieldSpecific": {}
+            },
+            "layoutData": [],
+            "processingMetadata": {
+                "ocrEngine": "mistral",
+                "processingTime": 0,
+                "processingTimestamp": datetime.now().isoformat(),
+                "documentClassification": "invoice",
+                "error": "Mistral API request timed out after 30 seconds"
+            }
+        }
+        
+        # Generate markdown output for error case
+        markdown_output = generate_markdown_from_extraction(error_response)
+        error_response["markdownOutput"] = markdown_output
+        
+        return json.dumps(error_response)
     except requests.exceptions.ConnectionError:
         print("Mistral API connection error")
-        return json.dumps({
+        error_response = {
             "vendorName": "",
+            "vendorAddress": "",
+            "vendorContact": "",
+            "clientName": "",
+            "clientAddress": "",
             "invoiceNumber": "",
             "totalAmount": 0,
+            "currency": "",
+            "paymentTerms": "",
+            "paymentMethod": "",
             "lineItems": [],
             "handwrittenNotes": [],
-            "error": "Failed to connect to Mistral API: connection error"
-        })
+            "additionalInfo": "",
+            "confidenceScores": {
+                "overall": 80,
+                "vendorInfo": 80,
+                "invoiceDetails": 80,
+                "lineItems": 80,
+                "totals": 80,
+                "handwrittenNotes": 50,
+                "fieldSpecific": {}
+            },
+            "layoutData": [],
+            "processingMetadata": {
+                "ocrEngine": "mistral",
+                "processingTime": 0,
+                "processingTimestamp": datetime.now().isoformat(),
+                "documentClassification": "invoice",
+                "error": "Failed to connect to Mistral API: connection error"
+            }
+        }
+        
+        # Generate markdown output for error case
+        markdown_output = generate_markdown_from_extraction(error_response)
+        error_response["markdownOutput"] = markdown_output
+        
+        return json.dumps(error_response)
     except Exception as e:
         error_message = str(e)
         print(f"Mistral API general error: {error_message}")
-        return json.dumps({
+        error_response = {
             "vendorName": "",
+            "vendorAddress": "",
+            "vendorContact": "",
+            "clientName": "",
+            "clientAddress": "",
             "invoiceNumber": "",
             "totalAmount": 0,
+            "currency": "",
+            "paymentTerms": "",
+            "paymentMethod": "",
             "lineItems": [],
             "handwrittenNotes": [],
-            "error": f"Mistral API error: {error_message}"
-        })
+            "additionalInfo": "",
+            "confidenceScores": {
+                "overall": 80,
+                "vendorInfo": 80,
+                "invoiceDetails": 80,
+                "lineItems": 80,
+                "totals": 80,
+                "handwrittenNotes": 50,
+                "fieldSpecific": {}
+            },
+            "layoutData": [],
+            "processingMetadata": {
+                "ocrEngine": "mistral",
+                "processingTime": 0,
+                "processingTimestamp": datetime.now().isoformat(),
+                "documentClassification": "invoice",
+                "error": f"Mistral API error: {error_message}"
+            }
+        }
+        
+        # Generate markdown output for error case
+        markdown_output = generate_markdown_from_extraction(error_response)
+        error_response["markdownOutput"] = markdown_output
+        
+        return json.dumps(error_response)
