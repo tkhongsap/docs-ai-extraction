@@ -57,7 +57,7 @@ if __name__ == "__main__":
         ocr_port = int(os.environ.get("OCR_API_PORT", "5006"))
         print_server_info()
         uvicorn.run(
-            "server.python_ocr.main:app", 
+            "python_ocr.main:app", 
             host="0.0.0.0", 
             port=ocr_port, 
             reload=True
