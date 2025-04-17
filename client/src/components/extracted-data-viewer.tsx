@@ -61,6 +61,12 @@ export default function ExtractedDataViewer({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Fetch document information
+  const { data: document } = useQuery<Document>({
+    queryKey: [`/api/documents/${documentId}`],
+    enabled: !!documentId,
+  });
+  
   // References for scroll sync
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -684,6 +690,23 @@ export default function ExtractedDataViewer({
                       Fallback reason: {extraction.processingMetadata.processingParams.reason}
                     </p>
                   )}
+                </div>
+                
+                <div>
+                  <p className="text-sm text-gray-500">OCR Service</p>
+                  <div className="flex items-center">
+                    <span className="text-sm font-medium mr-2">
+                      {document?.ocrService ? (
+                        document.ocrService === 'openai' ? 'OpenAI OCR' :
+                        document.ocrService === 'mistral' ? 'MistralAI OCR' :
+                        document.ocrService === 'ms-document-intelligence' ? 'MS Document Intelligence' :
+                        document.ocrService
+                      ) : "Not available"}
+                    </span>
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                      Selected
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </div>
