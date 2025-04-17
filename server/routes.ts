@@ -55,7 +55,17 @@ const upload = multer({
   },
 });
 
+// Import the Python OCR service to ensure it's available
+import pythonOcrService from './services/pythonOcrService';
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Try to ensure Python OCR service is running
+  try {
+    await pythonOcrService.ensurePythonOcrServerRunning();
+  } catch (error) {
+    console.warn('Could not start Python OCR server:', error);
+    console.warn('Some OCR features may not be available');
+  }
   const httpServer = createServer(app);
   
   // Add a simple health check endpoint to help Replit detect the server

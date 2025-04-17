@@ -262,6 +262,29 @@ async def root():
     """Root endpoint for API health check"""
     return {"status": "OK", "message": "OCR API is running", "endpoints": ["/openai-ocr", "/mistral-ocr", "/ms-azure-ocr"]}
 
+@app.get("/health")
+async def health_check():
+    """Dedicated health check endpoint"""
+    # Check if OpenAI API key is available
+    openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+    # Check if Mistral API key is available
+    mistral_api_key = os.environ.get("MISTRAL_API_KEY", "")
+    # Check if Azure Document Intelligence key is available
+    azure_key = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY", "")
+    
+    services_status = {
+        "openai": "available" if openai_api_key else "api_key_missing",
+        "mistral": "available" if mistral_api_key else "api_key_missing",
+        "azure": "available" if azure_key else "api_key_missing"
+    }
+    
+    return {
+        "status": "healthy",
+        "services": services_status,
+        "upload_directory": str(UPLOAD_FOLDER),
+        "upload_directory_exists": UPLOAD_FOLDER.exists()
+    }
+
 if __name__ == "__main__":
     # Run server with uvicorn when executed directly
     uvicorn.run("main:app", host="0.0.0.0", port=8000)

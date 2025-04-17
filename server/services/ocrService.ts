@@ -140,54 +140,21 @@ function normalizeOCRResult(rawResult: any, service: string): OCRResult {
   return normalized;
 }
 
+// Import Python OCR Service
+import pythonOcrService from './pythonOcrService';
+
 export async function processDocument(filePath: string, service: string = 'openai'): Promise<OCRResult> {
   console.log(`Processing document with file extension: ${filePath.split('.').pop()} using ${service}`);
 
   try {
-    // Read file once
-    const fileBuffer = fs.readFileSync(filePath);
-    const fileName = path.basename(filePath);
-    const fileExtension = path.extname(filePath).toLowerCase();
-    const mimeType = getMimeType(fileExtension);
+    // Ensure Python OCR server is running
+    await pythonOcrService.ensurePythonOcrServerRunning();
     
-    // Create form data with file
-    const formData = new FormData();
-    formData.append('file', fileBuffer, {
-      filename: fileName,
-      contentType: mimeType
-    });
-    
-    // Determine endpoint based on service
-    let endpoint = '';
-    switch(service) {
-      case 'openai':
-        endpoint = `${PYTHON_OCR_API_URL}/openai-ocr`;
-        break;
-      case 'mistral':
-        endpoint = `${PYTHON_OCR_API_URL}/mistral-ocr`;
-        break;
-      case 'ms-document-intelligence':
-        endpoint = `${PYTHON_OCR_API_URL}/ms-azure-ocr`;
-        break;
-      default:
-        endpoint = `${PYTHON_OCR_API_URL}/openai-ocr`; // Default to OpenAI
-    }
-    
-    console.log(`Sending document to Python OCR API at: ${endpoint}`);
-    
-    // Send request to Python API
-    const response = await axios.post(endpoint, formData, {
-      headers: {
-        ...formData.getHeaders()
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity
-    });
-    
-    console.log(`Received response from OCR API for ${service} service`);
+    // Process document with Python OCR service
+    const rawResult = await pythonOcrService.processPythonOcr(filePath, service);
     
     // Normalize result to common format
-    const result = normalizeOCRResult(response.data, service);
+    const result = normalizeOCRResult(rawResult, service);
     
     // Generate markdown and JSON outputs
     result.markdownOutput = llamaparseWrapperService.generateMarkdownOutput(result);
