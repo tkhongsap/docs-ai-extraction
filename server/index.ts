@@ -1,3 +1,7 @@
+// Load environment variables first
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -38,9 +42,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // ALWAYS serve the app on port 5000
+  // Use port from config (defaults to 5001 to avoid conflicts)
   // Start listening immediately so Replit can detect the port
-  const port = 5000;
+  const port = config.PORT;
   const server = await registerRoutes(app);
   
   server.listen({

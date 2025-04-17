@@ -13,10 +13,8 @@ import { spawn } from 'child_process';
 import { config } from '../config';
 import { FieldConfidence, LayoutPosition, ProcessingMetadata } from '@shared/schema';
 
-// Import the old llamaparseService for backward compatibility during transition
-import llamaparseService from './llamaparseService';
-
-// Use the new wrapper service
+// Use Python wrapper service
+// Make sure this is the correct path to your wrapper
 import llamaparseWrapperService from './llamaparseWrapperService';
 
 const { OPENAI_API_KEY, LLAMAPARSE_API_KEY } = config;
