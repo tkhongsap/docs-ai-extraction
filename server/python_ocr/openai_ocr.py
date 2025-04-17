@@ -82,7 +82,7 @@ def extract_invoice_data(file_content, content_type):
     try:
         # Call the OpenAI API with the image
         response = openai.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "user",
