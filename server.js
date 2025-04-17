@@ -18,11 +18,11 @@ if (!fs.existsSync('./uploads')) {
   console.log('Created uploads directory');
 }
 
-// Start Python OCR API server
+// Start Python OCR API server using the new start_ocr.py script
 console.log('\nStarting Python OCR API server on port 5006...');
 
-const pythonProcess = spawn('python', 
-  [path.join(__dirname, 'server/python_ocr/start_ocr_server.py')], 
+const pythonProcess = spawn('python3', 
+  [path.join(__dirname, 'start_ocr.py')], 
   { 
     stdio: 'inherit',
     env: { 
