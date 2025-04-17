@@ -2,32 +2,33 @@
  * OCR Service
  * 
  * Main service for document processing and text extraction.
- * Supports LlamaParse OCR engine via Python wrapper.
+ * Supports multiple OCR engines via Python FastAPI endpoints.
  */
 
 import { LineItem, HandwrittenNote } from '@shared/schema';
-import OpenAI from 'openai';
+import axios from 'axios';
+import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import { config } from '../config';
 import { FieldConfidence, LayoutPosition, ProcessingMetadata } from '@shared/schema';
 
-// Use Python wrapper service
-// Make sure this is the correct path to your wrapper
+// Default interface for OCR result
 import llamaparseWrapperService from './llamaparseWrapperService';
 
-const { OPENAI_API_KEY, LLAMAPARSE_API_KEY } = config;
-
-// Initialize OpenAI client lazily
-let openai: OpenAI | null = null;
+// Get API keys from config for logging
+const { OPENAI_API_KEY, AZURE_DOC_INTELLIGENCE_KEY, MISTRAL_API_KEY } = config;
 
 // Log API keys status for debugging (but don't abort startup)
 console.log(`OPENAI_API_KEY ${OPENAI_API_KEY ? 'is set' : 'is not set'}`);
-console.log(`LLAMAPARSE_API_KEY ${LLAMAPARSE_API_KEY ? 'is set' : 'is not set'}`);
+console.log(`AZURE_DOC_INTELLIGENCE_KEY ${AZURE_DOC_INTELLIGENCE_KEY ? 'is set' : 'is not set'}`);
+console.log(`MISTRAL_API_KEY ${MISTRAL_API_KEY ? 'is set' : 'is not set'}`);
 
-// Export the LlamaParse result interface
+// Export the LlamaParse result interface for compatibility
 export type { LlamaParseResult } from './llamaparseWrapperService';
+
+// Python OCR API base URL from config
+const PYTHON_OCR_API_URL = config.PYTHON_OCR_API_URL;
 
 // Helper function to get MIME type from file extension
 function getMimeType(extension: string): string {
@@ -79,136 +80,130 @@ export interface OCRResult {
   jsonOutput?: string;
 }
 
-// Parses handwritten notes from OpenAI Vision response
-function parseHandwrittenNotes(visionResponse: string): HandwrittenNote[] {
-  try {
-    // Simple regex pattern to extract handwritten notes
-    const handwrittenPattern = /handwritten note:?\s*"([^"]+)"/gi;
-    const notes: HandwrittenNote[] = [];
-    let match;
+// Function to normalize results from different OCR services to a common format
+function normalizeOCRResult(rawResult: any, service: string): OCRResult {
+  // Default confidence scores
+  const defaultConfidenceScores = {
+    overall: 80,
+    vendorInfo: 80,
+    invoiceDetails: 80,
+    lineItems: 80,
+    totals: 80,
+    handwrittenNotes: 50,
+    fieldSpecific: {}
+  };
+
+  // Default processing metadata
+  const processingMetadata = {
+    ocrEngine: service,
+    processingTime: 0,
+    processingTimestamp: new Date().toISOString(),
+    documentClassification: 'invoice'
+  };
+
+  // Initialize normalized result with default values
+  const normalized: OCRResult = {
+    vendorName: rawResult.vendorName || '',
+    vendorAddress: rawResult.vendorAddress || '',
+    vendorContact: rawResult.vendorContact || '',
+    clientName: rawResult.clientName || '',
+    clientAddress: rawResult.clientAddress || '',
+    invoiceNumber: rawResult.invoiceNumber || '',
+    invoiceDate: rawResult.invoiceDate ? new Date(rawResult.invoiceDate) : undefined,
+    dueDate: rawResult.dueDate ? new Date(rawResult.dueDate) : undefined,
+    totalAmount: typeof rawResult.totalAmount === 'number' ? rawResult.totalAmount : 
+                 (typeof rawResult.totalAmount === 'string' ? parseFloat(rawResult.totalAmount) : undefined),
+    subtotalAmount: typeof rawResult.subtotalAmount === 'number' ? rawResult.subtotalAmount : 
+                   (typeof rawResult.subtotalAmount === 'string' ? parseFloat(rawResult.subtotalAmount) : undefined),
+    taxAmount: typeof rawResult.taxAmount === 'number' ? rawResult.taxAmount : 
+               (typeof rawResult.taxAmount === 'string' ? parseFloat(rawResult.taxAmount) : undefined),
+    discountAmount: rawResult.discountAmount,
+    currency: rawResult.currency || '',
+    paymentTerms: rawResult.paymentTerms || '',
+    paymentMethod: rawResult.paymentMethod || '',
     
-    while ((match = handwrittenPattern.exec(visionResponse)) !== null) {
-      notes.push({
-        text: match[1],
-        confidence: 70 // Default confidence for OpenAI Vision extracted notes
-      });
-    }
+    // Ensure lineItems is always an array
+    lineItems: Array.isArray(rawResult.lineItems) ? rawResult.lineItems : [],
     
-    // If no matches found with pattern, take the whole text as one note if it mentions handwriting
-    if (notes.length === 0 && visionResponse.toLowerCase().includes('handwrit')) {
-      notes.push({
-        text: visionResponse.slice(0, 200) + (visionResponse.length > 200 ? '...' : ''),
-        confidence: 60
-      });
-    }
+    // Ensure handwrittenNotes is always an array
+    handwrittenNotes: Array.isArray(rawResult.handwrittenNotes) ? rawResult.handwrittenNotes : [],
     
-    return notes;
-  } catch (error) {
-    console.error('Error parsing handwritten notes:', error);
-    return [];
-  }
+    // Additional info
+    additionalInfo: rawResult.additionalInfo || '',
+    
+    // Metadata with defaults
+    confidenceScores: rawResult.confidenceScores || defaultConfidenceScores,
+    layoutData: rawResult.layoutData || [],
+    processingMetadata: rawResult.processingMetadata || processingMetadata
+  };
+
+  return normalized;
 }
 
-export async function processDocument(filePath: string, service: string = 'llamaparse'): Promise<OCRResult> {
+export async function processDocument(filePath: string, service: string = 'openai'): Promise<OCRResult> {
   console.log(`Processing document with file extension: ${filePath.split('.').pop()} using ${service}`);
 
-  // Read file once to avoid multiple disk reads
-  const fileBuffer = fs.readFileSync(filePath);
-  const fileExtension = path.extname(filePath).toLowerCase();
-  const base64Image = fileBuffer.toString('base64');
-  
-  // Initialize OpenAI client if needed
-  if (!openai && OPENAI_API_KEY) {
-    openai = new OpenAI({
-      apiKey: OPENAI_API_KEY
-    });
-  }
-  
-  if (!openai) {
-    console.error('OpenAI client is not initialized. Please check OPENAI_API_KEY environment variable.');
-    throw new Error('OpenAI client is not initialized. Please check OPENAI_API_KEY environment variable.');
-  }
-  
-  // For TypeScript's benefit
-  const openaiClient: OpenAI = openai;
-
-  let result: OCRResult;
-
   try {
-    if (service === 'llamaparse') {
-      console.log("Processing document with LlamaParse Python wrapper...");
-      
-      // Use the Python-based wrapper instead of direct API calls
-      const llamaparseResult = await llamaparseWrapperService.processDocument(filePath);
-      
-      // Process handwritten notes with OpenAI Vision if needed
-      let handwrittenNotes: HandwrittenNote[] = [];
-      let updatedConfidenceScores = llamaparseResult.confidenceScores;
-      
-      try {
-        console.log("Processing handwritten notes with OpenAI Vision...");
-        const visionResponse = await openaiClient.chat.completions.create({
-          model: "gpt-4-vision-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Please analyze this invoice and extract any handwritten notes or annotations. Also verify the extracted data for accuracy. Focus on: 1) Handwritten notes 2) Any special instructions or annotations 3) Verification of key invoice fields"
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:${getMimeType(fileExtension)};base64,${base64Image}`
-                  }
-                }
-              ]
-            }
-          ],
-          max_tokens: 1000
-        });
-
-        // Extract handwritten notes
-        handwrittenNotes = parseHandwrittenNotes(visionResponse.choices[0].message.content || '');
-        
-        // Update confidence scores with handwritten notes
-        if (handwrittenNotes.length > 0) {
-          // Simple confidence scoring when we find handwritten notes
-          updatedConfidenceScores = {
-            ...llamaparseResult.confidenceScores,
-            handwrittenNotes: 80,
-            overall: Math.min(
-              Math.round((llamaparseResult.confidenceScores.overall * 0.9) + 8),
-              100
-            )
-          };
-        }
-      } catch (error) {
-        // If OpenAI Vision fails for handwritten notes, it's not critical - proceed with empty handwritten notes
-        console.log("Warning: Could not process handwritten notes. Will continue without them:", error);
-        handwrittenNotes = [];
-      }
-
-      // Create the result from LlamaParse
-      result = {
-        ...llamaparseResult,
-        handwrittenNotes,
-        confidenceScores: updatedConfidenceScores
-      };
-      
-      console.log("Successfully processed document with LlamaParse Python wrapper");
-    } else {
-      throw new Error('Currently only LlamaParse service is supported');
+    // Read file once
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+    const fileExtension = path.extname(filePath).toLowerCase();
+    const mimeType = getMimeType(fileExtension);
+    
+    // Create form data with file
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: mimeType
+    });
+    
+    // Determine endpoint based on service
+    let endpoint = '';
+    switch(service) {
+      case 'openai':
+        endpoint = `${PYTHON_OCR_API_URL}/openai-ocr`;
+        break;
+      case 'mistral':
+        endpoint = `${PYTHON_OCR_API_URL}/mistral-ocr`;
+        break;
+      case 'ms-document-intelligence':
+        endpoint = `${PYTHON_OCR_API_URL}/ms-azure-ocr`;
+        break;
+      default:
+        endpoint = `${PYTHON_OCR_API_URL}/openai-ocr`; // Default to OpenAI
     }
+    
+    console.log(`Sending document to Python OCR API at: ${endpoint}`);
+    
+    // Send request to Python API
+    const response = await axios.post(endpoint, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
+    
+    console.log(`Received response from OCR API for ${service} service`);
+    
+    // Normalize result to common format
+    const result = normalizeOCRResult(response.data, service);
     
     // Generate markdown and JSON outputs
     result.markdownOutput = llamaparseWrapperService.generateMarkdownOutput(result);
     result.jsonOutput = llamaparseWrapperService.generateJSONOutput(result);
     
     return result;
-  } catch (error) {
-    console.error('Error processing document with LlamaParse:', error);
+  } catch (error: any) {
+    console.error(`Error processing document with ${service}:`, error);
+    
+    // Enhance error message with service-specific details
+    if (error.response) {
+      throw new Error(`OCR service error (${service}): ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+    } else if (error.request) {
+      throw new Error(`Network error when connecting to OCR service (${service}). Is the Python API running?`);
+    }
+    
     throw error;
   }
 }

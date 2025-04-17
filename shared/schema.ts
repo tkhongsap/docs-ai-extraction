@@ -12,7 +12,7 @@ export const documents = pgTable("documents", {
   status: text("status", { enum: ["uploaded", "processing", "completed", "error"] }).notNull(),
   storagePath: text("storage_path").notNull(),
   errorMessage: text("error_message"),
-  ocrService: text("ocr_service", { enum: ["mistral", "openai", "llamaparse"] }).default("mistral"),
+  ocrService: text("ocr_service", { enum: ["mistral", "openai", "ms-document-intelligence", "llamaparse"] }).default("openai"),
   processingMetadata: json("processing_metadata"),
 });
 

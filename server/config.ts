@@ -6,9 +6,12 @@
 
 // Environment variables with defaults
 export const config = {
-  // API Keys
+  // API Keys for OCR services
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   LLAMAPARSE_API_KEY: process.env.LLAMAPARSE_API_KEY || '',
+  AZURE_DOC_INTELLIGENCE_KEY: process.env.AZURE_DOC_INTELLIGENCE_KEY || '',
+  AZURE_DOC_INTELLIGENCE_ENDPOINT: process.env.AZURE_DOC_INTELLIGENCE_ENDPOINT || '',
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
   
   // Server configuration
   PORT: parseInt(process.env.PORT || '5001', 10),
@@ -29,4 +32,7 @@ export const config = {
   // API limits and timeouts
   API_TIMEOUT_MS: parseInt(process.env.API_TIMEOUT_MS || '30000', 10), // 30 seconds default
   MAX_CONCURRENT_REQUESTS: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '20', 10),
+  
+  // Python OCR API configuration
+  PYTHON_OCR_API_URL: process.env.PYTHON_OCR_API_URL || 'http://localhost:5005',
 }; 

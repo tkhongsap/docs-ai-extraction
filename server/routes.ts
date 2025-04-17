@@ -203,7 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, we'll process directly in a timeout to not block the response
       setTimeout(async () => {
         try {
-          // Check file extension to determine processing method
+          // Check file extension to determine if file type is supported
           const fileExtension = path.extname(document.storagePath).substring(1).toLowerCase();
           
           // Check if file type is supported
@@ -233,9 +233,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // For all files, use LlamaParse only
-          console.log(`Processing ${fileExtension} file with LlamaParse service...`);
-          const ocrResult = await ocrService.processDocument(document.storagePath, 'llamaparse');
+          // Get OCR service from document metadata (if not available, use default)
+          const selectedOcrService = document.ocrService || 'openai';
+          console.log(`Processing ${fileExtension} file with ${selectedOcrService} service...`);
+          
+          // Process document with the selected OCR service
+          const ocrResult = await ocrService.processDocument(document.storagePath, selectedOcrService);
 
           // Create extraction record
           const extraction = await storage.createExtraction({
@@ -258,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             processingMetadata: ocrResult.processingMetadata
           });
 
-          console.log(`Document ${id} processed successfully`);
+          console.log(`Document ${id} processed successfully with ${selectedOcrService} service`);
         } catch (error: any) {
           console.error(`Error processing document ${id}:`, error);
           
@@ -274,6 +277,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               errorMessage = "API authentication error. Please contact support to verify your account.";
             } else if (error.message.includes("Network")) {
               errorMessage = "Network connection error. Please check your internet connection and try again.";
+            } else if (error.message.includes("Is the Python API running")) {
+              errorMessage = "The OCR service is not responding. Please try again in a few minutes.";
             } else if (error.message.includes("hang up") || error.message.includes("socket") || error.message.includes("Connection closed")) {
               errorMessage = "The connection to the OCR service was lost. The service may be experiencing high load. Please try again later.";
             } else {
@@ -641,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existingExtractions = await storage.getExtractionByDocumentId(documentId);
           
           // Process document
-          const result = await llamaparseService.processDocument(filePath);
+          const result = await ocrService.processDocument(filePath, document.ocrService || 'openai');
           
           // Update database with new extraction data
           if (existingExtractions) {
@@ -692,7 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 // For handwritten notes, we'll use the processing from LlamaParse
                 // but focus on the document as a whole since it doesn't have special
                 // handwritten note extraction
-                const ocrResult = await llamaparseService.processDocument(filePath);
+                const ocrResult = await ocrService.processDocument(filePath, document.ocrService || 'openai');
                 
                 // ให้ใช้ข้อมูลที่มีอยู่หรือสร้างเป็นอาร์เรย์ว่าง
                 const handwrittenNotesData = ocrResult.handwrittenNotes || [];
