@@ -1,13 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { CloudUpload, Folder, LoaderPinwheel, FileText, Pencil, Table, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Document } from "@shared/schema";
 import DocumentCard from "@/components/document-card";
 import FeatureCard from "@/components/feature-card";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   
   const { data: documents, isLoading } = useQuery<Document[]>({
     queryKey: ['/api/documents'],
@@ -38,6 +42,38 @@ export default function Dashboard() {
   const successRate = totalDocuments > 0 
     ? Math.round((completedCount / totalDocuments) * 100)
     : 0;
+
+  // Mutation for document deletion (copied from Documents page)
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      try {
+        const response = await apiRequest('DELETE', `/api/documents/${id}`);
+        return response;
+      } catch (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      toast({
+        title: "Document Deleted",
+        description: "The document has been removed successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Deletion Failed",
+        description: "Failed to delete the document. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleDeleteDocument = (id: number) => {
+    if (window.confirm("Are you sure you want to delete this document?")) {
+      deleteDocumentMutation.mutate(id);
+    }
+  };
 
   return (
     <section className="container mx-auto px-4 py-6">
@@ -167,7 +203,7 @@ export default function Dashboard() {
         ) : recentDocuments && recentDocuments.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {recentDocuments.map(document => (
-              <DocumentCard key={document.id} document={document} />
+              <DocumentCard key={document.id} document={document} onDelete={handleDeleteDocument} />
             ))}
           </div>
         ) : (
