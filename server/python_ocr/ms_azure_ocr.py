@@ -13,14 +13,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv(override=True)
 
-# Get API credentials from environment
-AZURE_DOC_INTELLIGENCE_KEY = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY")
-AZURE_DOC_INTELLIGENCE_ENDPOINT = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", 
-                                    "https://document-intelligence.cognitiveservices.azure.com/")
-
-# Ensure endpoint ends with a slash
-if AZURE_DOC_INTELLIGENCE_ENDPOINT and not AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
-    AZURE_DOC_INTELLIGENCE_ENDPOINT = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}/"
+# Don't get API credentials globally 
+# We'll get them inside the function instead to ensure they're always fresh
 
 def generate_markdown_from_extraction(data):
     """
@@ -150,19 +144,40 @@ def extract_invoice_data(file_content):
     Returns:
         str: The extracted data in JSON string format
     """
+    # Load environment variables inside the function to ensure they're always fresh
+    load_dotenv(override=True)
+    
+    # Get API credentials
+    AZURE_DOC_INTELLIGENCE_KEY = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY", "")
+    AZURE_DOC_INTELLIGENCE_ENDPOINT = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", "")
+    
+    # Validate API key and endpoint
     if not AZURE_DOC_INTELLIGENCE_KEY:
         raise ValueError("Azure Document Intelligence key not found in environment variables")
     
     if not AZURE_DOC_INTELLIGENCE_ENDPOINT:
         raise ValueError("Azure Document Intelligence endpoint not found in environment variables")
+        
+    # Ensure endpoint ends with a slash
+    if not AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
+        AZURE_DOC_INTELLIGENCE_ENDPOINT = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}/"
     
     try:
-        # Check if the key is mistakenly set as a URL
+        # Check if the key and endpoint might be swapped
         if AZURE_DOC_INTELLIGENCE_KEY and (AZURE_DOC_INTELLIGENCE_KEY.startswith('http://') or AZURE_DOC_INTELLIGENCE_KEY.startswith('https://')):
-            print(f"Warning: AZURE_DOC_INTELLIGENCE_KEY appears to be a URL instead of a key")
-            raise ValueError("Azure Document Intelligence key appears to be a URL instead of an API key")
+            print(f"Warning: Key and endpoint appear to be swapped! Attempting to fix automatically...")
             
-        # Check if the endpoint is properly formatted
+            # Check if the endpoint looks like a key (not starting with http)
+            if AZURE_DOC_INTELLIGENCE_ENDPOINT and not AZURE_DOC_INTELLIGENCE_ENDPOINT.startswith('http'):
+                print(f"Auto-fixing: Swapping key and endpoint values")
+                # Swap them
+                AZURE_DOC_INTELLIGENCE_KEY, AZURE_DOC_INTELLIGENCE_ENDPOINT = AZURE_DOC_INTELLIGENCE_ENDPOINT, AZURE_DOC_INTELLIGENCE_KEY
+                print(f"After swap - Key length: {len(AZURE_DOC_INTELLIGENCE_KEY)}, Endpoint starts with: {AZURE_DOC_INTELLIGENCE_ENDPOINT[:15]}...")
+            else:
+                print(f"Warning: AZURE_DOC_INTELLIGENCE_KEY appears to be a URL but endpoint also looks like a URL")
+                raise ValueError("Azure Document Intelligence key appears to be a URL instead of an API key")
+            
+        # Check if the endpoint is properly formatted after potential swap
         if not AZURE_DOC_INTELLIGENCE_ENDPOINT.startswith('https://'):
             print(f"Warning: AZURE_DOC_INTELLIGENCE_ENDPOINT is not a valid HTTPS URL")
             raise ValueError("Azure Document Intelligence endpoint must be a valid HTTPS URL")
