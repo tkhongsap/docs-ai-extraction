@@ -8,8 +8,11 @@ import os
 import json
 import base64
 import requests
+import tempfile
+import uuid
 from datetime import datetime
 from dotenv import load_dotenv
+from mistralai import Mistral
 
 # Load environment variables
 load_dotenv(override=True)
