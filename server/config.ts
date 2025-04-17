@@ -14,7 +14,7 @@ export const config = {
   MISTRAL_API_KEY: process.env.MISTRAL_API_KEY || '',
   
   // Server configuration
-  PORT: parseInt(process.env.PORT || '5001', 10),
+  PORT: parseInt(process.env.PORT || '5002', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   
   // Storage configuration
@@ -34,5 +34,5 @@ export const config = {
   MAX_CONCURRENT_REQUESTS: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '20', 10),
   
   // Python OCR API configuration
-  PYTHON_OCR_API_URL: process.env.PYTHON_OCR_API_URL || 'http://localhost:5005',
+  PYTHON_OCR_API_URL: process.env.PYTHON_OCR_API_URL || 'http://localhost:5006',
 }; 

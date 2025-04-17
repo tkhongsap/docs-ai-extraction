@@ -42,9 +42,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Use port from config (defaults to 5001 to avoid conflicts)
+  // Use port 5000 for Replit workflow compatibility
   // Start listening immediately so Replit can detect the port
-  const port = config.PORT;
+  const port = 5000;
   const server = await registerRoutes(app);
   
   server.listen({

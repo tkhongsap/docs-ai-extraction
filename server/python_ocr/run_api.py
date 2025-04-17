@@ -38,9 +38,12 @@ def print_server_info():
     for service in ocr_services:
         print(f"  - {service}")
     
+    # Use port 5006 by default, or allow overriding from environment
+    ocr_port = int(os.environ.get("OCR_API_PORT", "5006"))
+    
     print("\nAPI will be available at:")
-    print("  - http://127.0.0.1:5005/")
-    print("  - http://0.0.0.0:5005/ (for external access)")
+    print(f"  - http://127.0.0.1:{ocr_port}/")
+    print(f"  - http://0.0.0.0:{ocr_port}/ (for external access)")
     print("\nEndpoints:")
     print("  - GET / - API health check")
     print("  - POST /openai-ocr - Process document with OpenAI")
@@ -50,11 +53,13 @@ def print_server_info():
 
 if __name__ == "__main__":
     try:
+        # Use port 5006 to avoid conflict with Node.js server
+        ocr_port = int(os.environ.get("OCR_API_PORT", "5006"))
         print_server_info()
         uvicorn.run(
             "server.python_ocr.main:app", 
             host="0.0.0.0", 
-            port=5005, 
+            port=ocr_port, 
             reload=True
         )
     except Exception as e:
