@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import Dict, Any, Union, List, Optional
 
 # กำหนดค่า API keys โดยตรง
-os.environ["LLAMA_CLOUD_API_KEY"] = "llx-sXOJiTJ4HfDycq2WBiG5iO4me8MNocZLZHGBZwoVd7gqmjX3"
-os.environ["OPENAI_API_KEY"] = "***REMOVED***"
+os.environ["LLAMA_CLOUD_API_KEY"] = os.environ.get("LLAMA_CLOUD_API_KEY", "")
+os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")
 
 try:
     from llama_parse import LlamaParse
