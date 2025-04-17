@@ -60,10 +60,18 @@ function getMimeType(extension: string): string {
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.tiff': 'image/tiff',
+    '.tif': 'image/tiff', 
     '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.doc': 'application/msword',
+    '.bmp': 'image/bmp',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
   };
   
-  return mimeTypes[extension] || 'application/octet-stream';
+  // Normalize extension (ensure it starts with a period)
+  const normalizedExt = extension.startsWith('.') ? extension : `.${extension}`;
+  
+  return mimeTypes[normalizedExt.toLowerCase()] || 'application/octet-stream';
 }
 
 // Process document with LlamaParse
@@ -75,6 +83,20 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
   const fileBuffer = fs.readFileSync(filePath);
   const fileName = path.basename(filePath);
   const fileExtension = path.extname(fileName).toLowerCase();
+
+  // Check if file type is supported by LlamaParse
+  const supportedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.docx'];
+  if (!supportedExtensions.includes(fileExtension)) {
+    throw new Error(`Unsupported file format: ${fileExtension}. LlamaParse supports PDF, PNG, JPG, TIFF, and DOCX files.`);
+  }
+
+  // For PDF files, validate the file format
+  if (fileExtension === '.pdf') {
+    // Check first few bytes for PDF signature (%PDF-)
+    if (fileBuffer.length < 5 || fileBuffer.toString('ascii', 0, 4) !== '%PDF') {
+      throw new Error('Invalid PDF file format. The file may be corrupted or not a valid PDF.');
+    }
+  }
 
   // Validate API key
   if (!LLAMAPARSE_API_KEY) {
@@ -249,6 +271,17 @@ async function processDocument(filePath: string): Promise<LlamaParseResult> {
       console.error('  Status:', globalLastError.response?.status);
       console.error('  Status Text:', globalLastError.response?.statusText);
       console.error('  Response Data:', globalLastError.response?.data);
+      
+      // Check for MIME type errors specifically
+      const errorMessage = globalLastError.response?.data?.error || globalLastError.message || '';
+      if (
+        errorMessage.toString().toLowerCase().includes('mime') || 
+        errorMessage.toString().toLowerCase().includes('content type') ||
+        errorMessage.toString().toLowerCase().includes('format') ||
+        errorMessage.toString().toLowerCase().includes('invalid file')
+      ) {
+        throw new Error(`LlamaParse API error: Invalid MIME type or unsupported file format. Please ensure your file is a valid PDF, image, or supported document format. Error details: ${errorMessage.toString()}`);
+      }
       
       // Check for common errors
       if (globalLastError.code === 'ENOTFOUND') {

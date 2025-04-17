@@ -214,11 +214,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(`Unsupported file format: ${fileExtension}. Only images and PDF documents are supported.`);
           }
           
-          // For PDF files, ensure we use LlamaParse only (no OpenAI Vision fallback)
-          const useService = fileExtension === 'pdf' ? 'llamaparse' : (document.ocrService || 'llamaparse');
+          // Add a MIME type check for PDF files to ensure they are valid
+          if (fileExtension === 'pdf') {
+            try {
+              // Read first few bytes of the file to check for PDF signature
+              const fileBuffer = Buffer.alloc(5);
+              const fd = fs.openSync(document.storagePath, 'r');
+              fs.readSync(fd, fileBuffer, 0, 5, 0);
+              fs.closeSync(fd);
+              
+              // Check for PDF signature (%PDF-)
+              const isPDF = fileBuffer.toString('ascii').startsWith('%PDF-');
+              if (!isPDF) {
+                throw new Error('Invalid PDF file: File does not have a valid PDF signature. It may be corrupted or not a true PDF.');
+              }
+            } catch (err: any) {
+              throw new Error(`Error validating PDF file: ${err.message}`);
+            }
+          }
           
-          // Process the document with OCR
-          const ocrResult = await ocrService.processDocument(document.storagePath, useService);
+          // For all files, use LlamaParse only
+          console.log(`Processing ${fileExtension} file with LlamaParse service...`);
+          const ocrResult = await ocrService.processDocument(document.storagePath, 'llamaparse');
 
           // Create extraction record
           const extraction = await storage.createExtraction({
