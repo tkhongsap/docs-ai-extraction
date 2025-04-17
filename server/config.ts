@@ -11,7 +11,7 @@ export const config = {
   LLAMAPARSE_API_KEY: process.env.LLAMAPARSE_API_KEY || '',
   
   // Server configuration
-  PORT: parseInt(process.env.PORT || '3000', 10),
+  PORT: parseInt(process.env.PORT || '5001', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   
   // Storage configuration

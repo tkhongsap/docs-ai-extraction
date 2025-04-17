@@ -2,18 +2,22 @@
  * OCR Service
  * 
  * Main service for document processing and text extraction.
- * Supports LlamaParse OCR engine.
+ * Supports LlamaParse OCR engine via Python wrapper.
  */
 
 import { LineItem, HandwrittenNote } from '@shared/schema';
 import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
-import FormData from 'form-data';
-import axios from 'axios';
+import { spawn } from 'child_process';
 import { config } from '../config';
 import { FieldConfidence, LayoutPosition, ProcessingMetadata } from '@shared/schema';
+
+// Import the old llamaparseService for backward compatibility during transition
 import llamaparseService from './llamaparseService';
+
+// Use the new wrapper service
+import llamaparseWrapperService from './llamaparseWrapperService';
 
 const { OPENAI_API_KEY, LLAMAPARSE_API_KEY } = config;
 
@@ -25,7 +29,7 @@ console.log(`OPENAI_API_KEY ${OPENAI_API_KEY ? 'is set' : 'is not set'}`);
 console.log(`LLAMAPARSE_API_KEY ${LLAMAPARSE_API_KEY ? 'is set' : 'is not set'}`);
 
 // Export the LlamaParse result interface
-export type { LlamaParseResult } from './llamaparseService';
+export type { LlamaParseResult } from './llamaparseWrapperService';
 
 // Helper function to get MIME type from file extension
 function getMimeType(extension: string): string {
@@ -134,11 +138,12 @@ export async function processDocument(filePath: string, service: string = 'llama
 
   try {
     if (service === 'llamaparse') {
-      // Process document with LlamaParse only
-      console.log("Processing document with LlamaParse...");
-      const llamaparseResult = await llamaparseService.processDocument(filePath);
+      console.log("Processing document with LlamaParse Python wrapper...");
       
-      // Process handwritten notes with OpenAI Vision only if needed (not essential, can be empty)
+      // Use the Python-based wrapper instead of direct API calls
+      const llamaparseResult = await llamaparseWrapperService.processDocument(filePath);
+      
+      // Process handwritten notes with OpenAI Vision if needed
       let handwrittenNotes: HandwrittenNote[] = [];
       let updatedConfidenceScores = llamaparseResult.confidenceScores;
       
@@ -170,10 +175,17 @@ export async function processDocument(filePath: string, service: string = 'llama
         handwrittenNotes = parseHandwrittenNotes(visionResponse.choices[0].message.content || '');
         
         // Update confidence scores with handwritten notes
-        updatedConfidenceScores = llamaparseService.updateHandwrittenNotesConfidence(
-          llamaparseResult.confidenceScores,
-          handwrittenNotes
-        );
+        if (handwrittenNotes.length > 0) {
+          // Simple confidence scoring when we find handwritten notes
+          updatedConfidenceScores = {
+            ...llamaparseResult.confidenceScores,
+            handwrittenNotes: 80,
+            overall: Math.min(
+              Math.round((llamaparseResult.confidenceScores.overall * 0.9) + 8),
+              100
+            )
+          };
+        }
       } catch (error) {
         // If OpenAI Vision fails for handwritten notes, it's not critical - proceed with empty handwritten notes
         console.log("Warning: Could not process handwritten notes. Will continue without them:", error);
@@ -187,14 +199,14 @@ export async function processDocument(filePath: string, service: string = 'llama
         confidenceScores: updatedConfidenceScores
       };
       
-      console.log("Successfully processed document with LlamaParse");
+      console.log("Successfully processed document with LlamaParse Python wrapper");
     } else {
       throw new Error('Currently only LlamaParse service is supported');
     }
     
     // Generate markdown and JSON outputs
-    result.markdownOutput = llamaparseService.generateMarkdownOutput(result);
-    result.jsonOutput = llamaparseService.generateJSONOutput(result);
+    result.markdownOutput = llamaparseWrapperService.generateMarkdownOutput(result);
+    result.jsonOutput = llamaparseWrapperService.generateJSONOutput(result);
     
     return result;
   } catch (error) {
