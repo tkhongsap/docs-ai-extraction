@@ -7,6 +7,7 @@ This module handles document OCR processing using Azure Document Intelligence.
 import os
 import json
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -20,6 +21,109 @@ AZURE_DOC_INTELLIGENCE_ENDPOINT = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOIN
 # Ensure endpoint ends with a slash
 if AZURE_DOC_INTELLIGENCE_ENDPOINT and not AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
     AZURE_DOC_INTELLIGENCE_ENDPOINT = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}/"
+
+def generate_markdown_from_extraction(data):
+    """
+    Generate a markdown representation of the extracted invoice data
+    
+    Args:
+        data (dict): The extracted invoice data
+        
+    Returns:
+        str: Markdown formatted text
+    """
+    # Initialize markdown content
+    md = ["# Invoice Extraction Result", ""]
+    
+    # Vendor Information section
+    md.append("## Vendor Information")
+    vendor_name = data.get("vendorName", "")
+    vendor_address = data.get("vendorAddress", "")
+    vendor_contact = data.get("vendorContact", "")
+    
+    md.append(f"- **Vendor Name**: {vendor_name if vendor_name else 'N/A'}")
+    md.append(f"- **Vendor Address**: {vendor_address if vendor_address else 'N/A'}")
+    md.append(f"- **Vendor Contact**: {vendor_contact if vendor_contact else 'N/A'}")
+    md.append("")
+    
+    # Invoice Details section
+    md.append("## Invoice Details")
+    invoice_number = data.get("invoiceNumber", "")
+    invoice_date = data.get("invoiceDate", None)
+    due_date = data.get("dueDate", None)
+    
+    # Format dates if they exist
+    invoice_date_str = "N/A"
+    if invoice_date:
+        try:
+            if isinstance(invoice_date, str) and "T" in invoice_date:
+                invoice_date_str = invoice_date.split("T")[0].replace("-", "/")
+            else:
+                invoice_date_str = str(invoice_date)
+        except:
+            invoice_date_str = str(invoice_date)
+    
+    due_date_str = "N/A"
+    if due_date:
+        try:
+            if isinstance(due_date, str) and "T" in due_date:
+                due_date_str = due_date.split("T")[0].replace("-", "/")
+            else:
+                due_date_str = str(due_date)
+        except:
+            due_date_str = str(due_date)
+    
+    md.append(f"- **Invoice Number**: {invoice_number if invoice_number else 'N/A'}")
+    md.append(f"- **Invoice Date**: {invoice_date_str}")
+    md.append(f"- **Due Date**: {due_date_str}")
+    md.append("")
+    
+    # Line Items section
+    md.append("## Line Items")
+    md.append("")
+    
+    line_items = data.get("lineItems", [])
+    if line_items and len(line_items) > 0:
+        # Create table header
+        md.append("| Description | Quantity | Unit Price | Amount |")
+        md.append("| ----------- | -------- | ---------- | ------ |")
+        
+        # Add each line item
+        for item in line_items:
+            description = item.get("description", "")
+            quantity = item.get("quantity", "")
+            unit_price = item.get("unitPrice", "")
+            amount = item.get("amount", "")
+            
+            md.append(f"| {description} | {quantity} | {unit_price} | {amount} |")
+    else:
+        md.append("No line items found.")
+    
+    md.append("")
+    
+    # Totals section
+    md.append("## Totals")
+    subtotal = data.get("subtotalAmount", "N/A")
+    tax = data.get("taxAmount", "N/A")
+    discount = data.get("discountAmount", "N/A")
+    total = data.get("totalAmount", "N/A")
+    
+    md.append(f"- **Subtotal**: {subtotal if subtotal != 'N/A' else 'N/A'}")
+    md.append(f"- **Tax**: {tax if tax != 'N/A' else 'N/A'}")
+    md.append(f"- **Discount**: {discount if discount != 'N/A' else 'N/A'}")
+    md.append(f"- **Total**: {total if total != 'N/A' else 'N/A'}")
+    
+    # Handwritten notes section (if any)
+    handwritten_notes = data.get("handwrittenNotes", [])
+    if handwritten_notes and len(handwritten_notes) > 0:
+        md.append("")
+        md.append("## Handwritten Notes")
+        for i, note in enumerate(handwritten_notes, 1):
+            text = note.get("text", "")
+            md.append(f"{i}. {text}")
+    
+    # Join all lines with newlines
+    return "\n".join(md)
 
 def format_currency(currency_value):
     """Format currency value from Azure response"""
@@ -64,7 +168,19 @@ def extract_invoice_data(file_content):
             raise ValueError("Azure Document Intelligence endpoint must be a valid HTTPS URL")
         
         # Use REST API directly instead of SDK to avoid dependency issues
-        analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
+        # Azure Document Intelligence has two possible API endpoints patterns
+        # Try to determine the right one based on the endpoint URL
+        
+        # The modern endpoint pattern (new resource names)
+        if "document-intelligence" in AZURE_DOC_INTELLIGENCE_ENDPOINT.lower():
+            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
+        # The legacy endpoint pattern (old Form Recognizer resources)
+        elif "formrecognizer" in AZURE_DOC_INTELLIGENCE_ENDPOINT.lower():
+            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}formrecognizer/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
+        # If neither pattern matches, use the modern pattern but log a warning
+        else:
+            print(f"Warning: Could not determine Azure endpoint pattern from {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
+            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
         
         # Log the endpoint for debugging (without the sensitive key)
         print(f"Using Azure Document Intelligence endpoint: {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
@@ -260,23 +376,89 @@ def extract_invoice_data(file_content):
             "handwrittenNotes": 0.0  # Azure doesn't explicitly handle handwritten notes
         }
         
-        # Add processing metadata
-        extracted_data["processingMetadata"] = {
-            "ocrEngine": "ms-document-intelligence",
-            "processingTime": 0,  # We don't track this in this implementation
-            "processingTimestamp": result.get("createdDateTime", ""),
-            "documentClassification": "Invoice"
+        # Create a standardized response structure
+        standardized_response = {
+            "vendorName": extracted_data.get("vendorName", ""),
+            "vendorAddress": extracted_data.get("vendorAddress", ""),
+            "vendorContact": extracted_data.get("vendorContact", ""),
+            "clientName": extracted_data.get("clientName", ""),
+            "clientAddress": extracted_data.get("clientAddress", ""),
+            "invoiceNumber": extracted_data.get("invoiceNumber", ""),
+            "invoiceDate": extracted_data.get("invoiceDate", None),
+            "dueDate": extracted_data.get("dueDate", None),
+            "totalAmount": extracted_data.get("totalAmount", 0),
+            "subtotalAmount": extracted_data.get("subtotalAmount", 0),
+            "taxAmount": extracted_data.get("taxAmount", 0),
+            "currency": extracted_data.get("currency", ""),
+            "paymentTerms": "",
+            "paymentMethod": "",
+            "lineItems": extracted_data.get("lineItems", []),
+            "handwrittenNotes": extracted_data.get("handwrittenNotes", []),
+            "additionalInfo": "",
+            "confidenceScores": {
+                "overall": 80,
+                "vendorInfo": 80,
+                "invoiceDetails": 80,
+                "lineItems": 80,
+                "totals": 80,
+                "handwrittenNotes": 50,
+                "fieldSpecific": {}
+            },
+            "layoutData": [],
+            "processingMetadata": {
+                "ocrEngine": "ms-document-intelligence",
+                "processingTime": 0,
+                "processingTimestamp": datetime.now().isoformat(),
+                "documentClassification": "invoice"
+            }
         }
         
-        return json.dumps(extracted_data)
+        # Generate markdown output
+        markdown_output = generate_markdown_from_extraction(standardized_response)
+        standardized_response["markdownOutput"] = markdown_output
+        
+        return json.dumps(standardized_response)
         
     except Exception as e:
         error_message = str(e)
-        return json.dumps({
+        print(f"Azure Document Intelligence error: {error_message}")
+        
+        # Create standardized error response
+        error_response = {
             "vendorName": "",
+            "vendorAddress": "",
+            "vendorContact": "",
+            "clientName": "",
+            "clientAddress": "",
             "invoiceNumber": "",
             "totalAmount": 0,
+            "currency": "",
+            "paymentTerms": "",
+            "paymentMethod": "",
             "lineItems": [],
             "handwrittenNotes": [],
-            "error": f"Azure Document Intelligence error: {error_message}"
-        })
+            "additionalInfo": "",
+            "confidenceScores": {
+                "overall": 80,
+                "vendorInfo": 80,
+                "invoiceDetails": 80,
+                "lineItems": 80,
+                "totals": 80,
+                "handwrittenNotes": 50,
+                "fieldSpecific": {}
+            },
+            "layoutData": [],
+            "processingMetadata": {
+                "ocrEngine": "ms-document-intelligence",
+                "processingTime": 0,
+                "processingTimestamp": datetime.now().isoformat(),
+                "documentClassification": "invoice",
+                "error": f"Azure Document Intelligence error: {error_message}"
+            }
+        }
+        
+        # Generate markdown output for error case
+        markdown_output = generate_markdown_from_extraction(error_response)
+        error_response["markdownOutput"] = markdown_output
+        
+        return json.dumps(error_response)
