@@ -1,0 +1,97 @@
+[
+  {
+    "vendor_name": {
+      "value": "FOOD\nPROJECT"
+    },
+    "vendor_address": {
+      "value": "{'houseNumber': '99/1', 'road': 'ถนนวงแหวนอุตสาหกรรม แขวงช่องนนทรี\\nเขตยานนาวา กรุงเทพฯ 10120', 'postalCode': '10120', 'city': 'BANGKOK', 'countryRegion': 'THAILAND.', 'streetAddress': '99/1 ถนนวงแหวนอุตสาหกรรม แขวงช่องนนทรี\\nเขตยานนาวา กรุงเทพฯ 10120'}"
+    },
+    "vendor_address_recipient": {
+      "value": "บริษัท ฟู้ดโปรเจ็ค (สยาม) จำกัด\nFOOD PROJECT (SIAM) CO., LTD."
+    },
+    "customer_name": {
+      "value": "เม้นท์ จำกัด (สำนักงานใหญ่)"
+    },
+    "customer_id": {
+      "value": "0010110792"
+    },
+    "customer_address": {
+      "value": "{'road': 'ถนนรัชดาภิเษก แขวงคลอง', 'postalCode': '10110', 'city': 'ทพมหานคร', 'streetAddress': 'ถนนรัชดาภิเษก แขวงคลอง', 'cityDistrict': 'เตย', 'house': 'เอ็น.ซี.ซี. แมนเนจเม้นท์ แอนด์ ดิเวลลอป\\nศูนย์การประชุมแห่งชาติสิริกิติ์'}"
+    },
+    "customer_address_recipient": {
+      "value": "เม้นท์ จำกัด (สำนักงานใหญ่)"
+    },
+    "invoice_id": {
+      "value": "2501201028084"
+    },
+    "invoice_date": {
+      "value": "2025-01-29"
+    },
+    "invoice_total": {
+      "value": {
+        "amount": 3060.2,
+        "currency_symbol": null
+      }
+    },
+    "due_date": null,
+    "purchase_order": {
+      "value": "3013024639"
+    },
+    "billing_address": null,
+    "billing_address_recipient": null,
+    "shipping_address": {
+      "value": "{'streetAddress': '', 'house': '60 ศูนย์การประชุมแห่งชาติสิริกิติ์ 060-0627359'}"
+    },
+    "shipping_address_recipient": {
+      "value": "ศูนย์ประชุม NCC."
+    },
+    "items": [
+      {
+        "description": {
+          "value": "chicken nuggets 1kg-pckนักเก็ตไก่"
+        },
+        "quantity": {
+          "value": 20
+        },
+        "unit": {
+          "value": null
+        },
+        "unit_price": {
+          "value": {
+            "amount": 143,
+            "currency_symbol": null
+          }
+        },
+        "product_code": {
+          "value": "V/40610101311511"
+        },
+        "amount": {
+          "value": {
+            "amount": 2860,
+            "currency_symbol": null
+          }
+        }
+      }
+    ],
+    "subtotal": {
+      "value": {
+        "amount": 2860,
+        "currency_symbol": null
+      }
+    },
+    "total_tax": {
+      "value": {
+        "amount": 200.2,
+        "currency_symbol": null
+      }
+    },
+    "previous_unpaid_balance": null,
+    "amount_due": null,
+    "service_start_date": null,
+    "service_end_date": null,
+    "service_address": null,
+    "service_address_recipient": null,
+    "remittance_address": null,
+    "remittance_address_recipient": null
+  }
+]
