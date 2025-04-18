@@ -216,7 +216,42 @@ function generateMarkdownOutput(extraction: any): string {
  * Generate JSON output from extraction data
  */
 function generateJSONOutput(extraction: any): string {
-  return JSON.stringify(extraction, null, 2);
+  // Create a clean object for JSON export
+  const exportData = {
+    documentInfo: {
+      vendor: extraction.vendorName || '',
+      vendorAddress: extraction.vendorAddress || '',
+      vendorContact: extraction.vendorContact || '',
+      client: extraction.clientName || '',
+      clientAddress: extraction.clientAddress || '',
+      invoiceNumber: extraction.invoiceNumber || '',
+      invoiceDate: extraction.invoiceDate ? new Date(extraction.invoiceDate).toISOString() : null,
+      dueDate: extraction.dueDate ? new Date(extraction.dueDate).toISOString() : null,
+      totalAmount: typeof extraction.totalAmount === 'number' ? extraction.totalAmount : 
+                  (typeof extraction.totalAmount === 'string' ? parseFloat(extraction.totalAmount) : 0),
+      subtotalAmount: typeof extraction.subtotalAmount === 'number' ? extraction.subtotalAmount : 
+                     (typeof extraction.subtotalAmount === 'string' ? parseFloat(extraction.subtotalAmount) : null),
+      taxAmount: typeof extraction.taxAmount === 'number' ? extraction.taxAmount : 
+                (typeof extraction.taxAmount === 'string' ? parseFloat(extraction.taxAmount) : null),
+      currency: extraction.currency || '',
+      paymentTerms: extraction.paymentTerms || '',
+      paymentMethod: extraction.paymentMethod || '',
+    },
+    lineItems: Array.isArray(extraction.lineItems) ? extraction.lineItems : [],
+    handwrittenNotes: Array.isArray(extraction.handwrittenNotes) ? extraction.handwrittenNotes : [],
+    additionalInfo: extraction.additionalInfo || '',
+    metadata: {
+      ocrEngine: extraction.processingMetadata?.ocrEngine || 'unknown',
+      processingTime: extraction.processingMetadata?.processingTime || 0,
+      processingTimestamp: extraction.processingMetadata?.processingTimestamp || new Date().toISOString(),
+      documentClassification: extraction.processingMetadata?.documentClassification || 'invoice'
+    },
+    confidenceScores: extraction.confidenceScores || {
+      overall: 80
+    }
+  };
+  
+  return JSON.stringify(exportData, null, 2);
 }
 
 /**

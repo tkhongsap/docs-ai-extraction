@@ -428,7 +428,9 @@ def extract_invoice_data(file_content):
         markdown_output = generate_markdown_from_extraction(standardized_response)
         standardized_response["markdownOutput"] = markdown_output
         
-        return json.dumps(standardized_response)
+        # Return the standardized_response as a dictionary instead of a JSON string
+        # This allows the FastAPI to properly serialize it
+        return standardized_response
         
     except Exception as e:
         error_message = str(e)
@@ -472,4 +474,5 @@ def extract_invoice_data(file_content):
         markdown_output = generate_markdown_from_extraction(error_response)
         error_response["markdownOutput"] = markdown_output
         
-        return json.dumps(error_response)
+        # Return the error_response as a dictionary 
+        return error_response

@@ -346,8 +346,33 @@ async def process_with_azure(file: UploadFile = File(...)):
             # Log the raw response for debugging (first 200 chars)
             print(f"Azure raw response from main.py: {str(extracted_data)[:200]}...")
             
-            # Try to parse JSON from response if not already JSON
-            if isinstance(extracted_data, str):
+            # The Azure handler now returns a dictionary directly
+            # We don't need to parse JSON string anymore
+            
+            # Add additional fields to ensure compatibility with other OCR responses
+            if isinstance(extracted_data, dict):
+                # Ensure date fields are properly formatted
+                for date_field in ['invoiceDate', 'dueDate']:
+                    if date_field in extracted_data and extracted_data[date_field]:
+                        # Convert dates to ISO string format if they aren't already
+                        if isinstance(extracted_data[date_field], datetime):
+                            try:
+                                extracted_data[date_field] = extracted_data[date_field].isoformat()
+                            except:
+                                # If conversion fails, use string representation
+                                extracted_data[date_field] = str(extracted_data[date_field])
+                        elif not isinstance(extracted_data[date_field], str):
+                            # For any other non-string type, convert to string
+                            extracted_data[date_field] = str(extracted_data[date_field])
+
+                # Ensure we have all required fields
+                if "status" not in extracted_data:
+                    extracted_data["status"] = "success"
+                
+                # Return properly structured data
+                return JSONResponse(content=extracted_data)
+            elif isinstance(extracted_data, str):
+                # Fallback for old responses that might still return strings
                 try:
                     json_data = json.loads(extracted_data)
                     return JSONResponse(content=json_data)
@@ -361,11 +386,18 @@ async def process_with_azure(file: UploadFile = File(...)):
                         "lineItems": [],
                         "handwrittenNotes": [],
                         "error": f"Failed to parse Azure response: {str(e)}",
+                        "status": "error",
                         "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
                     })
             else:
-                # If already parsed, return as is
-                return JSONResponse(content=extracted_data)
+                # Unexpected response type
+                return JSONResponse(content={
+                    "vendorName": "Error in Azure processing",
+                    "invoiceNumber": "Unknown",
+                    "totalAmount": 0,
+                    "status": "error",
+                    "error": "Unexpected response type from Azure OCR module"
+                })
         except Exception as service_error:
             # Handle any errors from the Azure OCR service
             print(f"Azure service error: {str(service_error)}")
