@@ -14,6 +14,7 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
   const [rotation, setRotation] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   
   // Format file size for display
   const formatFileSize = (bytes: number) => {
@@ -22,16 +23,48 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
   
+  // Updated zoom functions that interact with embedded PDF viewer
   const handleZoomIn = () => {
-    if (zoom < 200) setZoom(zoom + 25);
+    if (zoom < 200) {
+      const newZoom = zoom + 25;
+      setZoom(newZoom);
+      updatePdfZoom(newZoom);
+    }
   };
   
   const handleZoomOut = () => {
-    if (zoom > 50) setZoom(zoom - 25);
+    if (zoom > 50) {
+      const newZoom = zoom - 25;
+      setZoom(newZoom);
+      updatePdfZoom(newZoom);
+    }
   };
   
   const handleZoomChange = (value: number[]) => {
-    setZoom(value[0]);
+    const newZoom = value[0];
+    setZoom(newZoom);
+    updatePdfZoom(newZoom);
+  };
+  
+  // Function to update PDF zoom level
+  const updatePdfZoom = (zoomLevel: number) => {
+    if (iframeRef.current && document.fileType.includes("pdf")) {
+      // Force iframe refresh with new zoom level
+      const iframe = iframeRef.current;
+      const fileUrl = `/api/documents/${document.id}/file`;
+      
+      // Map zoom percentages to PDF viewer zoom levels
+      let pdfZoom;
+      if (zoomLevel <= 50) pdfZoom = 0.5;      // 50%
+      else if (zoomLevel <= 75) pdfZoom = 0.75;  // 75% 
+      else if (zoomLevel <= 100) pdfZoom = 1.0;  // 100%
+      else if (zoomLevel <= 125) pdfZoom = 1.25; // 125%
+      else if (zoomLevel <= 150) pdfZoom = 1.5;  // 150%
+      else if (zoomLevel <= 175) pdfZoom = 1.75; // 175%
+      else pdfZoom = 2.0;                      // 200%
+      
+      iframe.src = `${fileUrl}#zoom=${pdfZoom}`;
+    }
   };
   
   const handleRotate = () => {
@@ -39,8 +72,10 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
   };
   
   const handleResetView = () => {
-    setZoom(100);
+    const newZoom = 100;
+    setZoom(newZoom);
     setRotation(0);
+    updatePdfZoom(newZoom);
   };
   
   const toggleFullscreen = () => {
@@ -75,14 +110,32 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoom, rotation]);
   
+  // Update PDF zoom when zoom level changes
+  useEffect(() => {
+    if (document.fileType && document.fileType.includes("pdf") && iframeRef.current) {
+      updatePdfZoom(zoom);
+    }
+  }, [zoom, document.fileType]);
+  
   // Determine preview content based on file type
   const renderPreviewContent = () => {
     const fileUrl = `/api/documents/${document.id}/file`;
     
     if (document.fileType.includes("pdf")) {
+      // Calculate initial PDF zoom level
+      let pdfZoom;
+      if (zoom <= 50) pdfZoom = 0.5;      // 50%
+      else if (zoom <= 75) pdfZoom = 0.75;  // 75% 
+      else if (zoom <= 100) pdfZoom = 1.0;  // 100%
+      else if (zoom <= 125) pdfZoom = 1.25; // 125%
+      else if (zoom <= 150) pdfZoom = 1.5;  // 150%
+      else if (zoom <= 175) pdfZoom = 1.75; // 175%
+      else pdfZoom = 2.0;                 // 200%
+      
       return (
         <iframe 
-          src={`${fileUrl}#zoom=${zoom/100}`} 
+          ref={iframeRef}
+          src={`${fileUrl}#zoom=${pdfZoom}`} 
           className="w-full h-full border-0"
           style={{ 
             transform: `rotate(${rotation}deg)`,
