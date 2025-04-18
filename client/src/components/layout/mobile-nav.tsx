@@ -13,27 +13,27 @@ export default function MobileNav() {
       <div className="flex justify-around">
         <Link 
           href="/" 
-          className={`flex-1 text-center py-3 ${isActive("/") ? "text-primary" : "text-gray-600"}`}
+          className={`flex-1 text-center py-3 ${isActive("/") ? "text-[#3182ce]" : "text-[#1a202c]"}`}
         >
-          <div className={`mx-auto ${isActive("/") ? "bg-primary/10 text-primary" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
+          <div className={`mx-auto ${isActive("/") ? "bg-[#3182ce]/10 text-[#3182ce]" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
             <LayoutDashboard className="h-5 w-5" />
           </div>
           <span className="text-xs font-medium">Dashboard</span>
         </Link>
         <Link 
           href="/documents" 
-          className={`flex-1 text-center py-3 ${isActive("/documents") ? "text-primary" : "text-gray-600"}`}
+          className={`flex-1 text-center py-3 ${isActive("/documents") ? "text-[#3182ce]" : "text-[#1a202c]"}`}
         >
-          <div className={`mx-auto ${isActive("/documents") ? "bg-primary/10 text-primary" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
+          <div className={`mx-auto ${isActive("/documents") ? "bg-[#3182ce]/10 text-[#3182ce]" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
             <FileText className="h-5 w-5" />
           </div>
           <span className="text-xs font-medium">Documents</span>
         </Link>
         <Link 
           href="/upload" 
-          className={`flex-1 text-center py-3 ${isActive("/upload") ? "text-primary" : "text-gray-600"}`}
+          className={`flex-1 text-center py-3 ${isActive("/upload") ? "text-[#3182ce]" : "text-[#1a202c]"}`}
         >
-          <div className={`mx-auto ${isActive("/upload") ? "bg-primary/10 text-primary" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
+          <div className={`mx-auto ${isActive("/upload") ? "bg-[#3182ce]/10 text-[#3182ce]" : "text-gray-500"} rounded-full p-1 w-10 h-10 flex items-center justify-center mb-1`}>
             <Upload className="h-5 w-5" />
           </div>
           <span className="text-xs font-medium">Upload</span>

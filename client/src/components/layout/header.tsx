@@ -22,19 +22,19 @@ export default function Header() {
           
           <nav className="hidden md:flex space-x-1">
             <Link href="/">
-              <Button variant={isActive("/") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+              <Button variant={isActive("/") ? "default" : "ghost"} className={`flex items-center gap-2 font-medium ${isActive("/") ? "bg-[#3182ce] text-white" : "text-[#1a202c] hover:text-[#3182ce]"}`}>
                 <LayoutDashboard className="h-4 w-4" />
                 Dashboard
               </Button>
             </Link>
             <Link href="/documents">
-              <Button variant={isActive("/documents") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+              <Button variant={isActive("/documents") ? "default" : "ghost"} className={`flex items-center gap-2 font-medium ${isActive("/documents") ? "bg-[#3182ce] text-white" : "text-[#1a202c] hover:text-[#3182ce]"}`}>
                 <FileText className="h-4 w-4" />
                 Documents
               </Button>
             </Link>
             <Link href="/upload">
-              <Button variant={isActive("/upload") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+              <Button variant={isActive("/upload") ? "default" : "ghost"} className={`flex items-center gap-2 font-medium ${isActive("/upload") ? "bg-[#3182ce] text-white" : "text-[#1a202c] hover:text-[#3182ce]"}`}>
                 <Upload className="h-4 w-4" />
                 Upload
               </Button>
@@ -42,11 +42,11 @@ export default function Header() {
           </nav>
           
           <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/10">
-              <CircleHelp className="h-5 w-5 text-primary" />
+            <Button variant="ghost" size="icon" className="rounded-full hover:bg-[#3182ce]/10">
+              <CircleHelp className="h-5 w-5 text-[#3182ce]" />
             </Button>
             <div className="relative">
-              <Button variant="outline" size="icon" className="rounded-full border-2 border-primary text-primary">
+              <Button variant="outline" size="icon" className="rounded-full border-2 border-[#3182ce] text-[#3182ce]">
                 <User className="h-5 w-5" />
               </Button>
             </div>

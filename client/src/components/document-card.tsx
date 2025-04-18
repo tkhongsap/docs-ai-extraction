@@ -87,8 +87,8 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
   const statusInfo = getStatusInfo(document.status);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-all duration-200 hover:border-gray-200 group">
-      <div className="h-44 bg-gray-50 relative flex flex-col items-center justify-center p-6">
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-[#e2e8f0] hover:shadow-md transition-all duration-200 group">
+      <div className="h-44 bg-[#f8f9fa] relative flex flex-col items-center justify-center p-6">
         {/* Document thumbnail */}
         <div className="mb-2">
           {getFileIcon(document.fileType)}
@@ -106,14 +106,14 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
         </div>
       </div>
       <div className="p-5">
-        <h3 className="font-semibold text-gray-800 mb-1 truncate" title={document.originalFilename}>
+        <h3 className="font-semibold text-[#1a202c] mb-1 truncate" title={document.originalFilename}>
           {document.originalFilename}
         </h3>
         <p className="text-gray-500 text-sm mb-4">
           Uploaded {formatDistanceToNow(new Date(document.uploadDate), { addSuffix: true })}
         </p>
         <div className="flex flex-wrap gap-2 mb-4">
-          <span className="bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full font-medium">
+          <span className="bg-[#3182ce]/10 text-[#3182ce] text-xs px-2.5 py-1 rounded-full font-medium">
             {getDocumentType(document.originalFilename, document.fileType)}
           </span>
         </div>
@@ -137,7 +137,7 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
           
           {document.status === "completed" ? (
             <Link href={`/review/${document.id}`}>
-              <Button size="sm" variant="outline" className="group-hover:bg-primary group-hover:text-white transition-colors">
+              <Button size="sm" variant="outline" className="group-hover:bg-[#3182ce] group-hover:text-white transition-colors">
                 <Eye className="h-3.5 w-3.5 mr-1.5" />
                 View Details
               </Button>
@@ -156,7 +156,7 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
             </Button>
           ) : (
             <Link href={`/processing`}>
-              <Button size="sm" className="gap-1.5">
+              <Button size="sm" className="gap-1.5 bg-[#3182ce] hover:bg-[#3182ce]/90">
                 Process
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>

@@ -82,21 +82,21 @@ export default function Dashboard() {
   return (
     <section className="container mx-auto px-4 py-8">
       {/* Hero Section */}
-      <div className="relative rounded-2xl overflow-hidden mb-12 bg-gradient-to-r from-primary/90 to-primary">
+      <div className="relative rounded-lg overflow-hidden mb-12 bg-[#3182ce]">
         <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.7))]"></div>
         <div className="relative z-10 p-8 md:p-14 flex flex-col md:flex-row items-center">
           <div className="md:w-3/5 mb-8 md:mb-0 md:pr-10">
             <h1 className="text-3xl md:text-4xl font-bold mb-4 text-white">
               Document Intelligence Platform
             </h1>
-            <p className="text-blue-100 mb-8 text-lg leading-relaxed">
+            <p className="text-white/90 mb-8 text-lg leading-relaxed">
               Transform any document into structured data using our AI-powered OCR technology. Extract text, tables, and handwritten notes with unprecedented accuracy.
             </p>
             <div className="flex flex-wrap gap-4">
               <Button 
                 size="lg"
                 onClick={navigateToUpload}
-                className="bg-white text-primary hover:bg-blue-50"
+                className="bg-white text-[#3182ce] hover:bg-blue-50"
               >
                 <CloudUpload className="mr-2 h-5 w-5" />
                 Upload Document
@@ -114,20 +114,20 @@ export default function Dashboard() {
           </div>
           <div className="md:w-2/5 flex justify-center">
             <div className="relative w-64 h-64 md:w-80 md:h-80">
-              <div className="absolute inset-0 bg-white/10 rounded-xl transform rotate-6 scale-95"></div>
-              <div className="absolute inset-0 bg-white/20 rounded-xl transform rotate-3 scale-90"></div>
-              <div className="absolute inset-0 bg-white rounded-xl shadow-lg flex items-center justify-center">
+              <div className="absolute inset-0 bg-white/10 rounded-lg transform rotate-6 scale-95"></div>
+              <div className="absolute inset-0 bg-white/20 rounded-lg transform rotate-3 scale-90"></div>
+              <div className="absolute inset-0 bg-white rounded-lg shadow-lg flex items-center justify-center">
                 <div className="w-3/4 space-y-2">
-                  <div className="h-8 w-16 bg-primary/20 rounded-md"></div>
-                  <div className="h-2 bg-gray-200 rounded"></div>
-                  <div className="h-2 bg-gray-200 rounded"></div>
-                  <div className="h-2 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-12 bg-gray-100 rounded-md my-4"></div>
+                  <div className="h-8 w-16 bg-[#3182ce]/20 rounded-md"></div>
+                  <div className="h-2 bg-[#e2e8f0] rounded"></div>
+                  <div className="h-2 bg-[#e2e8f0] rounded"></div>
+                  <div className="h-2 bg-[#e2e8f0] rounded w-3/4"></div>
+                  <div className="h-12 bg-[#f8f9fa] rounded-md my-4"></div>
                   <div className="flex items-center space-x-2">
-                    <div className="h-8 w-8 bg-primary/20 rounded-full"></div>
+                    <div className="h-8 w-8 bg-[#3182ce]/20 rounded-full"></div>
                     <div>
-                      <div className="h-2 bg-gray-200 rounded w-24"></div>
-                      <div className="h-2 bg-gray-200 rounded w-16 mt-1"></div>
+                      <div className="h-2 bg-[#e2e8f0] rounded w-24"></div>
+                      <div className="h-2 bg-[#e2e8f0] rounded w-16 mt-1"></div>
                     </div>
                   </div>
                 </div>
@@ -189,19 +189,19 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Upload Card */}
-      <div className="bg-gradient-to-r from-primary to-primary/90 rounded-xl shadow-md overflow-hidden mb-12">
+      <div className="bg-[#3182ce] rounded-lg shadow-md overflow-hidden mb-12">
         <div className="relative p-8">
           <div className="absolute top-0 right-0 w-32 h-32 md:w-64 md:h-64 bg-white/10 rounded-full transform translate-x-1/3 -translate-y-1/3"></div>
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between">
             <div className="mb-6 md:mb-0">
               <h3 className="font-bold text-2xl text-white mb-2">Ready to Process Your Document?</h3>
-              <p className="text-blue-100 mb-0">
+              <p className="text-white/90 mb-0">
                 Our AI technology supports multiple formats including PDFs, images, and scanned documents
               </p>
             </div>
             <div className="flex-shrink-0">
               <Button 
-                className="bg-white text-primary hover:bg-blue-50 shadow-md text-base px-6 py-6 h-auto"
+                className="bg-white text-[#3182ce] hover:bg-gray-50 shadow-md text-base px-6 py-6 h-auto"
                 onClick={navigateToUpload}
               >
                 <CloudUpload className="mr-2 h-5 w-5" />
@@ -228,7 +228,7 @@ export default function Dashboard() {
             title="Smart Text Extraction"
             description="Extract text with context-aware AI that understands document structure and meaning"
             icon={<FileText className="h-5 w-5" />}
-            iconClassName="bg-blue-100 text-primary"
+            iconClassName="bg-blue-100 text-[#3182ce]"
           />
           
           <FeatureCard
@@ -249,21 +249,21 @@ export default function Dashboard() {
             title="Multi-Model AI Processing"
             description="Leverages multiple AI models for enhanced accuracy and context understanding"
             icon={<Brain className="h-5 w-5" />}
-            iconClassName="bg-green-100 text-green-600"
+            iconClassName="bg-blue-100 text-[#3182ce]"
           />
           
           <FeatureCard
             title="Real-time Analytics"
             description="View extraction confidence scores and processing metrics in real-time dashboards"
             icon={<BarChart className="h-5 w-5" />}
-            iconClassName="bg-amber-100 text-amber-600"
+            iconClassName="bg-teal-100 text-[#38b2ac]"
           />
           
           <FeatureCard
             title="High-Speed Processing"
             description="Process documents in seconds with our optimized parallel processing architecture"
             icon={<Zap className="h-5 w-5" />}
-            iconClassName="bg-red-100 text-red-600"
+            iconClassName="bg-purple-100 text-[#805ad5]"
           />
         </div>
       </div>
