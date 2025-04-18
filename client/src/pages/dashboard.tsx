@@ -3,7 +3,8 @@ import { Link, useLocation } from "wouter";
 import { 
   CloudUpload, Folder, LoaderPinwheel, FileText, Pencil, 
   Table, AlertCircle, CheckCircle, BarChart, Zap, 
-  Brain, ArrowRightCircle, Activity, Database, TrendingUp
+  Brain, ArrowRightCircle, Activity, Database, TrendingUp,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Document } from "@shared/schema";
