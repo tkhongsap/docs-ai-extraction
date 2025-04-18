@@ -10,6 +10,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 
 # Import required packages with error handling
 try:
@@ -64,7 +65,7 @@ try:
 except ImportError:
     # Fallback function if import fails
     def azure_extract(file_content):
-        return json.dumps({"error": "Azure Document Intelligence module is not available"})
+        return {"error": "Azure Document Intelligence module is not available"}
 
 # Create FastAPI app
 app = FastAPI(title="Document OCR API", description="API for processing documents with various OCR services")
