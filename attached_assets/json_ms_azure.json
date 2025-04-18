@@ -1,17 +1,29 @@
 {
-  "vendorName": "",
-  "vendorAddress": "",
-  "vendorContact": "",
-  "clientName": "",
-  "clientAddress": "",
-  "invoiceNumber": "",
-  "totalAmount": 0,
-  "currency": "",
-  "paymentTerms": "",
-  "paymentMethod": "",
+  "documentInfo": {
+    "vendor": "",
+    "vendorAddress": "",
+    "vendorContact": "",
+    "client": "",
+    "clientAddress": "",
+    "invoiceNumber": "",
+    "invoiceDate": null,
+    "dueDate": null,
+    "totalAmount": 0,
+    "subtotalAmount": null,
+    "taxAmount": null,
+    "currency": "",
+    "paymentTerms": "",
+    "paymentMethod": ""
+  },
   "lineItems": [],
   "handwrittenNotes": [],
   "additionalInfo": "",
+  "metadata": {
+    "ocrEngine": "ms-document-intelligence",
+    "processingTime": 0,
+    "processingTimestamp": "2025-04-18T03:01:38.704988",
+    "documentClassification": "invoice"
+  },
   "confidenceScores": {
     "overall": 80,
     "vendorInfo": 80,
@@ -20,14 +32,5 @@
     "totals": 80,
     "handwrittenNotes": 50,
     "fieldSpecific": {}
-  },
-  "layoutData": [],
-  "processingMetadata": {
-    "ocrEngine": "ms-document-intelligence",
-    "processingTime": 0,
-    "processingTimestamp": "2025-04-18T02:36:42.662205",
-    "documentClassification": "invoice",
-    "error": "Azure Document Intelligence error: HTTPSConnectionPool(host='tcct-ocr-doc-intel.cognitiveservices.azure.comdocumentintelligence', port=443): Max retries exceeded with url: /documentModels/prebuilt-invoice:analyze?api-version=2023-07-31&features=indices%2CocrHighResolution&locale=en (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7f7873f43110>: Failed to resolve 'tcct-ocr-doc-intel.cognitiveservices.azure.comdocumentintelligence' ([Errno -2] Name or service not known)\"))"
-  },
-  "markdownOutput": "# Invoice Extraction Result\n\n## Vendor Information\n- **Vendor Name**: N/A\n- **Vendor Address**: N/A\n- **Vendor Contact**: N/A\n\n## Invoice Details\n- **Invoice Number**: N/A\n- **Invoice Date**: N/A\n- **Due Date**: N/A\n\n## Line Items\n\nNo line items found.\n\n## Totals\n- **Subtotal**: N/A\n- **Tax**: N/A\n- **Discount**: N/A\n- **Total**: N/A"
+  }
 }
