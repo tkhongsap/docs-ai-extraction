@@ -166,6 +166,12 @@ def extract_invoice_data(file_content):
         # Wait for the result
         invoices = poller.result()
         
+        # Log the raw result for debugging
+        print(f"Azure Document Intelligence raw result: {invoices}")
+        print(f"Number of documents detected: {len(invoices.documents)}")
+        if len(invoices.documents) > 0:
+            print(f"First document fields: {invoices.documents[0].fields.keys()}")
+        
         # Helper functions for serialization
         def serialize_address(address_value):
             if address_value:
