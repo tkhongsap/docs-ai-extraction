@@ -9,12 +9,22 @@ interface FeatureCardProps {
 
 export default function FeatureCard({ title, description, icon, iconClassName }: FeatureCardProps) {
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-[#e2e8f0] hover:shadow-md transition-all duration-200 hover:border-[#e2e8f0] group">
-      <div className={`${iconClassName} w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200`}>
-        {icon}
+    <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100 hover:shadow-xl transition-all duration-300 hover:border-indigo-100 group relative overflow-hidden">
+      {/* Subtle background gradient that appears on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      
+      {/* Icon with enhanced hover animation */}
+      <div className={`${iconClassName} w-14 h-14 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-all duration-300 shadow-sm group-hover:shadow-md`}>
+        <div className="transform group-hover:rotate-[-8deg] transition-transform duration-300">
+          {icon}
+        </div>
       </div>
-      <h3 className="font-semibold text-[#1a202c] text-lg mb-2">{title}</h3>
-      <p className="text-gray-600 text-base leading-relaxed">{description}</p>
+      
+      {/* Content with improved typography */}
+      <div className="relative z-10">
+        <h3 className="font-semibold text-gray-800 text-xl mb-3 group-hover:text-indigo-700 transition-colors duration-300">{title}</h3>
+        <p className="text-gray-600 leading-relaxed">{description}</p>
+      </div>
     </div>
   );
 }
