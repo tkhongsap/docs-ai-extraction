@@ -108,68 +108,84 @@ export default function FileDropzone({
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
     
     if (extension === 'pdf') {
-      return <FileText className="h-5 w-5 text-red-500" />;
+      return <FileText className="h-6 w-6 text-red-500" />;
     } else if (['jpg', 'jpeg', 'png', 'tiff', 'tif', 'gif', 'webp'].includes(extension)) {
-      return <FileImage className="h-5 w-5 text-blue-500" />; 
+      return <FileImage className="h-6 w-6 text-blue-500" />; 
     }
     
-    return <FileText className="h-5 w-5 text-gray-500" />;
+    return <FileText className="h-6 w-6 text-gray-500" />;
   };
 
   return (
     <div>
       <div 
         {...getRootProps()} 
-        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-          ${isDragActive && !isDragReject ? 'border-primary bg-blue-50' : ''}
-          ${isDragReject ? 'border-red-500 bg-red-50' : ''}
-          ${!isDragActive && !isDragReject ? 'border-gray-300 hover:border-primary hover:bg-gray-50' : ''}
+        className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300 group overflow-hidden
+          ${isDragActive && !isDragReject ? 'border-indigo-500 bg-indigo-50/50' : ''}
+          ${isDragReject ? 'border-red-500 bg-red-50/50' : ''}
+          ${!isDragActive && !isDragReject ? 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/30' : ''}
         `}
       >
+        {/* Background gradient */}
+        <div className={`absolute inset-0 bg-gradient-to-r from-indigo-100/20 to-blue-100/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ${isDragActive ? 'opacity-100' : ''}`}></div>
+        
         <input {...getInputProps()} />
-        <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CloudUpload className="text-primary h-8 w-8" />
+        <div className="relative z-10">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-500 shadow-md">
+            <CloudUpload className="text-indigo-600 h-10 w-10 group-hover:rotate-[-8deg] transition-transform duration-500" />
+          </div>
+          <h3 className="text-xl font-bold mb-3 text-gray-800 group-hover:text-indigo-700 transition-colors duration-300">
+            {isDragActive 
+              ? isDragReject 
+                ? "File type not accepted" 
+                : "Drop files here" 
+              : "Drag & Drop Files Here"}
+          </h3>
+          <p className="text-gray-600 mb-5 max-w-md mx-auto">or click to browse files from your computer</p>
+          <Button 
+            type="button"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white transition-all duration-200 px-5 shadow-md hover:shadow-lg"
+          >
+            Select Files
+          </Button>
+          <p className="text-sm text-gray-500 mt-5">
+            Supported formats: PDF*, JPEG, PNG, GIF, WEBP, TIFF (max 10MB, up to 10 files)
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            *PDF files have limited OCR capabilities. For best results, use image formats.
+          </p>
         </div>
-        <h3 className="text-lg font-bold mb-2">
-          {isDragActive 
-            ? isDragReject 
-              ? "File type not accepted" 
-              : "Drop files here" 
-            : "Drag & Drop Files Here"}
-        </h3>
-        <p className="text-gray-600 mb-4">or click to browse files from your computer</p>
-        <Button type="button">Select Files</Button>
-        <p className="text-sm text-gray-500 mt-4">
-          Supported formats: PDF*, JPEG, PNG, GIF, WEBP, TIFF (max 10MB, up to 10 files)
-        </p>
-        <p className="text-xs text-amber-600 mt-1">
-          *PDF files have limited OCR capabilities. For best results, use image formats.
-        </p>
       </div>
 
       {/* Error Messages */}
       {(fileTypeError || fileSizeError) && (
-        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md">
+        <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 shadow-sm">
           <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+            <div className="bg-red-100 p-1 rounded-full text-red-500 flex-shrink-0 mt-0.5 mr-3">
+              <AlertCircle className="h-5 w-5" />
+            </div>
             <div>
-              {fileTypeError && <p>{fileTypeError}</p>}
-              {fileSizeError && <p>{fileSizeError}</p>}
+              {fileTypeError && <p className="font-medium mb-1">{fileTypeError}</p>}
+              {fileSizeError && <p className="font-medium">{fileSizeError}</p>}
             </div>
           </div>
         </div>
       )}
 
       {/* Selected Files List */}
-      <div className="mt-6">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="font-medium">Selected Files ({selectedFiles.length}/10)</h3>
+      <div className="mt-8">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center">
+            <div className="h-1 w-5 bg-indigo-600 rounded-full mr-2"></div>
+            <h3 className="font-medium text-gray-800">Selected Files ({selectedFiles.length}/10)</h3>
+          </div>
           {selectedFiles.length > 0 && (
             <Button 
               variant="outline" 
-              size="sm" 
+              size="sm"
               onClick={clearAllFiles}
               disabled={isUploading}
+              className="border-gray-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors"
             >
               Clear All
             </Button>
@@ -184,33 +200,38 @@ export default function FileDropzone({
               const error = uploadErrors[file.name];
               
               return (
-                <div key={index} className="bg-gray-50 rounded-md p-3 flex flex-col">
+                <div 
+                  key={index} 
+                  className="bg-gray-50 rounded-lg p-4 border border-gray-100 hover:border-indigo-100 hover:shadow-sm transition-all duration-300 group"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center">
-                      {getFileIcon(file.name)}
+                      <div className="bg-gradient-to-br from-gray-100 to-white p-2 rounded-lg shadow-sm group-hover:scale-105 transition-transform duration-300">
+                        {getFileIcon(file.name)}
+                      </div>
                       <div className="ml-3">
-                        <p className="font-medium truncate max-w-md">{file.name}</p>
+                        <p className="font-medium text-gray-800 truncate max-w-md group-hover:text-indigo-600 transition-colors duration-300">{file.name}</p>
                         <p className="text-gray-500 text-sm">{formatFileSize(file.size)}</p>
                       </div>
                     </div>
                     <button 
-                      className="text-gray-500 hover:text-red-500 focus:outline-none"
+                      className="text-gray-400 hover:text-red-500 focus:outline-none p-1.5 rounded-full hover:bg-red-50 transition-colors duration-200"
                       onClick={() => removeFile(file)}
                       disabled={isUploading}
                       type="button"
                     >
-                      <X size={18} />
+                      <X size={16} />
                     </button>
                   </div>
                   
                   {/* Progress bar */}
                   {isUploading && (
-                    <div className="mt-1">
-                      <Progress value={progress} className="h-2" />
-                      <div className="flex justify-between mt-1">
+                    <div className="mt-2">
+                      <Progress value={progress} className="h-1.5 bg-gray-200" indicatorClassName="bg-indigo-600" />
+                      <div className="flex justify-between mt-1.5">
                         <span className="text-xs text-gray-500">{progress}% uploaded</span>
                         {error && (
-                          <span className="text-xs text-red-500">{error}</span>
+                          <span className="text-xs text-red-500 font-medium">{error}</span>
                         )}
                       </div>
                     </div>
@@ -220,7 +241,7 @@ export default function FileDropzone({
             })}
           </div>
         ) : (
-          <div className="bg-gray-50 rounded-md p-5 text-center text-gray-500">
+          <div className="bg-gray-50 rounded-lg p-6 text-center text-gray-500 border border-gray-100">
             No files selected
           </div>
         )}

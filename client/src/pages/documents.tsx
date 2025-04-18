@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Search, 
@@ -15,7 +15,8 @@ import {
   Check, 
   Clock, 
   Upload, 
-  PlusCircle 
+  PlusCircle, 
+  X 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,10 +55,16 @@ export default function Documents() {
   const [sortBy, setSortBy] = useState("date"); // "name", "date", "status"
   const [sortOrder, setSortOrder] = useState("desc"); // "asc", "desc"
   const [viewMode, setViewMode] = useState("grid"); // "grid", "list"
+  const [isVisible, setIsVisible] = useState(false);
   const itemsPerPage = 10;
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // For animations
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
   
   // Fetch documents with caching
   const { data: documents, isLoading } = useQuery<Document[]>({
@@ -199,459 +206,434 @@ export default function Documents() {
   }, [documents]);
 
   return (
-    <section className="container mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold mb-2">Document Library</h1>
-          <p className="text-gray-600">View and manage your processed documents</p>
+    <section className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Header with gradient background */}
+      <div className={`relative rounded-2xl overflow-hidden mb-8 bg-gradient-to-br from-indigo-600 to-blue-700 shadow-xl transform transition-all duration-700 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+        <div className="absolute inset-0 bg-grid-white/10 [mask-image:linear-gradient(0deg,transparent,rgba(255,255,255,0.7))]"></div>
+        <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute -top-24 -left-24 w-64 h-64 bg-blue-300/20 rounded-full blur-3xl"></div>
+        <div className="relative z-10 p-8 flex flex-col md:flex-row justify-between items-center">
+          <div>
+            <div className="inline-block px-3 py-1 rounded-full bg-white/20 text-white text-sm font-medium mb-4 backdrop-blur-sm">
+              Document Management
+            </div>
+            <h1 className="text-3xl font-bold mb-2 text-white">Document Library</h1>
+            <p className="text-white/90 max-w-xl">
+              View, manage, and organize your processed documents. Search, filter, and analyze your document data efficiently.
+            </p>
+          </div>
+          <div className="mt-6 md:mt-0">
+            <Button asChild className="bg-white text-indigo-700 hover:bg-blue-50 shadow-lg hover:shadow-xl transition-all duration-200 font-medium gap-2 py-6 px-8 h-auto rounded-xl">
+              <Link href="/upload">
+                <PlusCircle className="h-5 w-5" />
+                Upload New Document
+              </Link>
+            </Button>
+          </div>
         </div>
-        <Button asChild className="gap-2">
-          <Link href="/upload">
-            <PlusCircle className="h-4 w-4" />
-            Upload New Document
-          </Link>
-        </Button>
       </div>
 
       {/* Status tabs */}
-      <Tabs defaultValue="all" className="mb-6" onValueChange={(value) => {
-        setStatusFilter(value === "all" ? "" : value);
-        resetPage();
-      }}>
-        <TabsList className="grid grid-cols-5 w-full">
-          <TabsTrigger value="all" className="relative">
-            All
-            <Badge variant="outline" className="ml-1 bg-gray-100">{documentCounts.all}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="uploaded" className="relative">
-            <Upload className="h-4 w-4 mr-1" />
-            Uploaded
-            <Badge variant="outline" className="ml-1 bg-gray-100">{documentCounts.uploaded}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="processing" className="relative">
-            <Clock className="h-4 w-4 mr-1" />
-            Processing
-            <Badge variant="outline" className="ml-1 bg-gray-100">{documentCounts.processing}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="relative">
-            <Check className="h-4 w-4 mr-1" />
-            Completed
-            <Badge variant="outline" className="ml-1 bg-gray-100">{documentCounts.completed}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="error" className="relative">
-            <AlertTriangle className="h-4 w-4 mr-1" />
-            Error
-            <Badge variant="outline" className="ml-1 bg-gray-100">{documentCounts.error}</Badge>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className={`transform transition-all duration-700 delay-100 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+        <Tabs defaultValue="all" className="mb-6" onValueChange={(value) => {
+          setStatusFilter(value === "all" ? "" : value);
+          resetPage();
+        }}>
+          <TabsList className="grid grid-cols-5 w-full bg-white rounded-xl shadow-md p-1 border border-gray-100">
+            <TabsTrigger value="all" className="relative data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg transition-all">
+              All
+              <Badge variant="outline" className="ml-1.5 bg-white text-indigo-700 border-0">{documentCounts.all}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="uploaded" className="relative data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg transition-all">
+              <Upload className="h-4 w-4 mr-1.5" />
+              Uploaded
+              <Badge variant="outline" className="ml-1.5 bg-white text-indigo-700 border-0">{documentCounts.uploaded}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="processing" className="relative data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg transition-all">
+              <Clock className="h-4 w-4 mr-1.5" />
+              Processing
+              <Badge variant="outline" className="ml-1.5 bg-white text-indigo-700 border-0">{documentCounts.processing}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="completed" className="relative data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg transition-all">
+              <Check className="h-4 w-4 mr-1.5" />
+              Completed
+              <Badge variant="outline" className="ml-1.5 bg-white text-indigo-700 border-0">{documentCounts.completed}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="error" className="relative data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg transition-all">
+              <AlertTriangle className="h-4 w-4 mr-1.5" />
+              Error
+              <Badge variant="outline" className="ml-1.5 bg-white text-indigo-700 border-0">{documentCounts.error}</Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       {/* Filters and Search */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          <div className="relative flex-grow">
+      <div className={`bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-100 transform transition-all duration-700 delay-200 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-grow relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <Input
               placeholder="Search documents..."
-              className="pl-10"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 resetPage();
               }}
+              className="pl-10 border-gray-200 focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 rounded-lg"
             />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 flex-wrap md:flex-nowrap">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2 border-gray-200 text-gray-700 hover:text-indigo-700 hover:border-indigo-300 transition-colors">
+                  <Filter size={16} />
+                  <span className="hidden sm:inline">Filter</span>
+                  <ChevronDown size={14} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-4" align="end">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium text-sm mb-2 text-gray-800">Document Type</h4>
+                    <Select value={typeFilter} onValueChange={(value) => {
+                      setTypeFilter(value);
+                      resetPage();
+                    }}>
+                      <SelectTrigger className="w-full border-gray-200">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="invoice">Invoices</SelectItem>
+                        <SelectItem value="receipt">Receipts</SelectItem>
+                        <SelectItem value="note">Notes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-sm mb-2 text-gray-800">Date Range</h4>
+                    <Select value={dateFilter} onValueChange={(value) => {
+                      setDateFilter(value);
+                      resetPage();
+                    }}>
+                      <SelectTrigger className="w-full border-gray-200">
+                        <SelectValue placeholder="Select date range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="7days">Last 7 Days</SelectItem>
+                        <SelectItem value="30days">Last 30 Days</SelectItem>
+                        <SelectItem value="90days">Last 90 Days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2 border-gray-200 text-gray-700 hover:text-indigo-700 hover:border-indigo-300 transition-colors">
+                  {sortBy === "name" ? (
+                    <>
+                      <span className="hidden sm:inline">Name</span>
+                      {sortOrder === "asc" ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                    </>
+                  ) : sortBy === "date" ? (
+                    <>
+                      <Calendar size={16} />
+                      <span className="hidden sm:inline">Date</span>
+                      {sortOrder === "asc" ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                    </>
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline">Status</span>
+                      {sortOrder === "asc" ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem onClick={() => handleSort("name")} className="gap-2 cursor-pointer">
+                  <span>Name</span>
+                  {sortBy === "name" && (sortOrder === "asc" ? <SortAsc size={14} /> : <SortDesc size={14} />)}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSort("date")} className="gap-2 cursor-pointer">
+                  <span>Date</span>
+                  {sortBy === "date" && (sortOrder === "asc" ? <SortAsc size={14} /> : <SortDesc size={14} />)}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleSort("status")} className="gap-2 cursor-pointer">
+                  <span>Status</span>
+                  {sortBy === "status" && (sortOrder === "asc" ? <SortAsc size={14} /> : <SortDesc size={14} />)}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                  className="gap-2 cursor-pointer"
+                >
+                  {sortOrder === "asc" ? (
+                    <>
+                      <SortDesc size={14} />
+                      <span>Sort Descending</span>
+                    </>
+                  ) : (
+                    <>
+                      <SortAsc size={14} />
+                      <span>Sort Ascending</span>
+                    </>
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
             <Button
-              variant={viewMode === "grid" ? "default" : "outline"}
-              size="sm"
-              className="h-10"
-              onClick={() => setViewMode("grid")}
+              variant="outline"
+              onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+              className="gap-2 border-gray-200 text-gray-700 hover:text-indigo-700 hover:border-indigo-300 transition-colors"
             >
-              <i className="fas fa-th-large mr-1"></i> Grid
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              size="sm"
-              className="h-10"
-              onClick={() => setViewMode("list")}
-            >
-              <i className="fas fa-list mr-1"></i> List
+              {viewMode === "grid" ? (
+                <>
+                  <FileText size={16} />
+                  <span className="hidden sm:inline">List</span>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-0.5">
+                    <div className="w-1.5 h-1.5 bg-current rounded-sm"></div>
+                    <div className="w-1.5 h-1.5 bg-current rounded-sm"></div>
+                  </div>
+                  <div className="flex gap-0.5">
+                    <div className="w-1.5 h-1.5 bg-current rounded-sm"></div>
+                    <div className="w-1.5 h-1.5 bg-current rounded-sm"></div>
+                  </div>
+                  <span className="hidden sm:inline">Grid</span>
+                </>
+              )}
             </Button>
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex items-center">
-            <Filter className="h-4 w-4 mr-2 text-gray-400" />
-            <span className="text-sm text-gray-500 mr-2">Filter by:</span>
-          </div>
-          
-          <Select 
-            value={typeFilter} 
-            onValueChange={(value) => {
-              setTypeFilter(value);
-              resetPage();
-            }}
-          >
-            <SelectTrigger className="w-[130px] h-9">
-              <FileText className="h-4 w-4 mr-1 text-gray-400" />
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="invoice">Invoices</SelectItem>
-              <SelectItem value="receipt">Receipts</SelectItem>
-              <SelectItem value="note">Notes</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Select 
-            value={dateFilter} 
-            onValueChange={(value) => {
-              setDateFilter(value);
-              resetPage();
-            }}
-          >
-            <SelectTrigger className="w-[130px] h-9">
-              <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-              <SelectValue placeholder="Date Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="7days">Last 7 Days</SelectItem>
-              <SelectItem value="30days">Last 30 Days</SelectItem>
-              <SelectItem value="90days">Last 90 Days</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <div className="ml-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1">
-                  {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-                  Sort: {sortBy === "name" ? "Name" : sortBy === "date" ? "Date" : "Status"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleSort("date")} className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Date {sortBy === "date" && (sortOrder === "asc" ? "(Oldest first)" : "(Newest first)")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleSort("name")} className="flex items-center">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Name {sortBy === "name" && (sortOrder === "asc" ? "(A-Z)" : "(Z-A)")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleSort("status")} className="flex items-center">
-                  <Check className="h-4 w-4 mr-2" />
-                  Status {sortBy === "status" && (sortOrder === "asc" ? "(Asc)" : "(Desc)")}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSortOrder("asc")} className="flex items-center">
-                  <SortAsc className="h-4 w-4 mr-2" />
-                  Ascending
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortOrder("desc")} className="flex items-center">
-                  <SortDesc className="h-4 w-4 mr-2" />
-                  Descending
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Active filters display */}
-      {(searchQuery || (typeFilter && typeFilter !== "all") || statusFilter || dateFilter !== "all") && (
-        <div className="mb-4 flex flex-wrap gap-2 items-center">
-          <span className="text-sm text-gray-500">Active filters:</span>
-          
-          {searchQuery && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Search: {searchQuery}
-              <button 
-                className="ml-1 hover:text-gray-700" 
-                onClick={() => setSearchQuery("")}
-              >
-                &times;
-              </button>
-            </Badge>
-          )}
-          
-          {typeFilter && typeFilter !== "all" && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Type: {typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
-              <button 
-                className="ml-1 hover:text-gray-700" 
-                onClick={() => setTypeFilter("all")}
-              >
-                &times;
-              </button>
-            </Badge>
-          )}
-          
-          {statusFilter && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-              <button 
-                className="ml-1 hover:text-gray-700" 
-                onClick={() => setStatusFilter("")}
-              >
-                &times;
-              </button>
-            </Badge>
-          )}
-          
-          {dateFilter !== "all" && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              Date: {dateFilter === "7days" ? "Last 7 days" : dateFilter === "30days" ? "Last 30 days" : "Last 90 days"}
-              <button 
-                className="ml-1 hover:text-gray-700" 
-                onClick={() => setDateFilter("all")}
-              >
-                &times;
-              </button>
-            </Badge>
-          )}
-          
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => {
-              setSearchQuery("");
-              setTypeFilter("all");
-              setStatusFilter("");
-              setDateFilter("all");
-              resetPage();
-            }}
-            className="ml-auto text-xs text-gray-500 hover:text-gray-700"
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Clear all filters
-          </Button>
-        </div>
-      )}
-
-      {/* Documents Grid/List */}
-      {isLoading ? (
-        <div className="flex justify-center p-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      ) : paginatedDocuments.length > 0 ? (
-        viewMode === "grid" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {paginatedDocuments.map(document => (
-              <DocumentCard 
-                key={document.id} 
-                document={document} 
-                onDelete={handleDeleteDocument}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedDocuments.map(document => {
-                  const statusInfo = {
-                    uploaded: { color: "bg-gray-100 text-gray-800", icon: <FileText className="h-4 w-4 mr-1" /> },
-                    processing: { color: "bg-yellow-100 text-yellow-800", icon: <Clock className="h-4 w-4 mr-1 animate-pulse" /> },
-                    completed: { color: "bg-green-100 text-green-800", icon: <Check className="h-4 w-4 mr-1" /> },
-                    error: { color: "bg-red-100 text-red-800", icon: <AlertTriangle className="h-4 w-4 mr-1" /> }
-                  };
-                  
-                  const status = statusInfo[document.status as keyof typeof statusInfo];
-                  
-                  return (
-                    <tr key={document.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-md flex items-center justify-center">
-                            <i className={`${document.fileType.includes('pdf') ? 'fas fa-file-pdf text-red-500' : 'fas fa-file-image text-blue-500'} text-lg`}></i>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 truncate max-w-xs" title={document.originalFilename}>
-                              {document.originalFilename}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {document.fileType.split('/')[1]?.toUpperCase() || 'FILE'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {new Date(document.uploadDate).toLocaleDateString()}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
-                          {status.icon}
-                          {document.status.charAt(0).toUpperCase() + document.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {document.status === "completed" ? (
-                          <Link href={`/review/${document.id}`} className="text-primary hover:underline mr-4">
-                            View
-                          </Link>
-                        ) : document.status === "processing" ? (
-                          <Link href="/processing" className="text-yellow-600 hover:underline mr-4">
-                            Progress
-                          </Link>
-                        ) : document.status === "uploaded" ? (
-                          <Link href="/processing" className="text-primary hover:underline mr-4">
-                            Process
-                          </Link>
-                        ) : (
-                          <span className="text-gray-300 mr-4">View</span>
-                        )}
-                        <button 
-                          className="text-red-600 hover:text-red-900"
-                          onClick={() => handleDeleteDocument(document.id)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )
-      ) : (
-        <div className="bg-white rounded-lg p-8 text-center">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <i className="fas fa-file-alt text-gray-400 text-2xl"></i>
-          </div>
-          <h3 className="text-lg font-bold mb-2">No documents found</h3>
-          <p className="text-gray-600 mb-4">
-            {documents?.length 
-              ? "No documents match your current filters. Try adjusting your search criteria." 
-              : "You haven't uploaded any documents yet. Start by uploading your first document."}
-          </p>
-          <Button asChild>
-            <Link href="/upload">Upload New Document</Link>
-          </Button>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {filteredAndSortedDocuments.length > itemsPerPage && (
-        <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-sm text-gray-500">
-            Showing page {currentPage} of {totalPages} ({filteredAndSortedDocuments.length} documents)
-          </div>
-          <nav className="inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-l-md"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            
-            {totalPages <= 5 ? (
-              // Show all pages if there are 5 or fewer
-              Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  className="rounded-none"
-                  onClick={() => setCurrentPage(page)}
+        {/* Applied filters display */}
+        {(searchQuery || typeFilter !== "all" || dateFilter !== "all" || statusFilter) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {searchQuery && (
+              <Badge variant="outline" className="gap-1 py-1.5 px-3 bg-indigo-50 border-indigo-100 text-indigo-700">
+                Search: {searchQuery}
+                <button 
+                  onClick={() => {
+                    setSearchQuery("");
+                    resetPage();
+                  }}
+                  className="ml-1 hover:bg-indigo-100 rounded-full p-0.5 transition-colors"
                 >
-                  {page}
-                </Button>
-              ))
-            ) : (
-              // Show first, last, and pages around current
-              <>
-                {/* First page */}
-                <Button
-                  variant={currentPage === 1 ? "default" : "outline"}
-                  className="rounded-none"
-                  onClick={() => setCurrentPage(1)}
-                >
-                  1
-                </Button>
-                
-                {/* Ellipsis if current page is not near the beginning */}
-                {currentPage > 3 && (
-                  <Button variant="outline" className="rounded-none cursor-default">
-                    ...
-                  </Button>
-                )}
-                
-                {/* Pages around current */}
-                {Array.from({ length: 3 }, (_, i) => {
-                  const page = Math.min(Math.max(currentPage - 1 + i, 2), totalPages - 1);
-                  return (
-                    (page > 1 && page < totalPages) && (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? "default" : "outline"}
-                        className="rounded-none"
-                        onClick={() => setCurrentPage(page)}
-                      >
-                        {page}
-                      </Button>
-                    )
-                  );
-                })}
-                
-                {/* Ellipsis if current page is not near the end */}
-                {currentPage < totalPages - 2 && (
-                  <Button variant="outline" className="rounded-none cursor-default">
-                    ...
-                  </Button>
-                )}
-                
-                {/* Last page */}
-                <Button
-                  variant={currentPage === totalPages ? "default" : "outline"}
-                  className="rounded-none"
-                  onClick={() => setCurrentPage(totalPages)}
-                >
-                  {totalPages}
-                </Button>
-              </>
+                  <X size={14} />
+                </button>
+              </Badge>
             )}
             
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-r-md"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
+            {typeFilter !== "all" && (
+              <Badge variant="outline" className="gap-1 py-1.5 px-3 bg-indigo-50 border-indigo-100 text-indigo-700">
+                Type: {typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
+                <button 
+                  onClick={() => {
+                    setTypeFilter("all");
+                    resetPage();
+                  }}
+                  className="ml-1 hover:bg-indigo-100 rounded-full p-0.5 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </Badge>
+            )}
+            
+            {statusFilter && (
+              <Badge variant="outline" className="gap-1 py-1.5 px-3 bg-indigo-50 border-indigo-100 text-indigo-700">
+                Status: {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                <button 
+                  onClick={() => {
+                    setStatusFilter("");
+                    resetPage();
+                  }}
+                  className="ml-1 hover:bg-indigo-100 rounded-full p-0.5 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </Badge>
+            )}
+            
+            {dateFilter !== "all" && (
+              <Badge variant="outline" className="gap-1 py-1.5 px-3 bg-indigo-50 border-indigo-100 text-indigo-700">
+                Date: {dateFilter === "7days" ? "Last 7 Days" : dateFilter === "30days" ? "Last 30 Days" : "Last 90 Days"}
+                <button 
+                  onClick={() => {
+                    setDateFilter("all");
+                    resetPage();
+                  }}
+                  className="ml-1 hover:bg-indigo-100 rounded-full p-0.5 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </Badge>
+            )}
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => {
+                setSearchQuery("");
+                setTypeFilter("all");
+                setStatusFilter("");
+                setDateFilter("all");
+                resetPage();
+              }}
+              className="text-gray-500 hover:text-indigo-700 py-1.5 h-auto transition-colors"
             >
-              <ChevronRight className="h-4 w-4" />
+              Clear All Filters
             </Button>
-          </nav>
+          </div>
+        )}
+      </div>
+
+      {/* Documents Display */}
+      {isLoading ? (
+        <div className={`flex justify-center items-center h-64 transform transition-all duration-700 delay-300 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <div className="flex flex-col items-center">
+            <div className="w-16 h-16 relative">
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+            </div>
+            <p className="mt-4 text-gray-600">Loading documents...</p>
+          </div>
+        </div>
+      ) : filteredAndSortedDocuments.length === 0 ? (
+        <div className={`bg-white rounded-xl shadow-lg border border-gray-100 p-12 text-center transform transition-all duration-700 delay-300 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <div className="mx-auto mb-6 w-24 h-24 bg-gradient-to-br from-indigo-100 to-blue-50 rounded-full flex items-center justify-center">
+            <FileText className="h-10 w-10 text-indigo-600" />
+          </div>
+          <h3 className="text-xl font-bold mb-3 text-gray-800">No documents found</h3>
+          <p className="text-gray-600 mb-8 max-w-md mx-auto">
+            {searchQuery || typeFilter !== "all" || dateFilter !== "all" || statusFilter
+              ? "No documents match your current filters. Try adjusting your search or filters."
+              : "You haven't uploaded any documents yet. Upload your first document to get started."}
+          </p>
+          <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-6 py-5 h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200">
+            <Link href="/upload">
+              <PlusCircle className="h-5 w-5" />
+              Upload Document
+            </Link>
+          </Button>
+        </div>
+      ) : (
+        <div className={`transform transition-all duration-700 delay-300 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-gray-600">
+              Showing <span className="font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredAndSortedDocuments.length)}</span> of <span className="font-medium">{filteredAndSortedDocuments.length}</span> documents
+            </p>
+            
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 h-8 w-8 border-gray-200"
+                >
+                  <ChevronLeft size={16} />
+                </Button>
+                
+                {Array.from({ length: Math.min(totalPages, 5) }).map((_, idx) => {
+                  let pageNumber: number;
+                  
+                  // Handle edge cases for pagination display
+                  if (totalPages <= 5) {
+                    pageNumber = idx + 1;
+                  } else if (currentPage <= 3) {
+                    pageNumber = idx + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNumber = totalPages - 4 + idx;
+                  } else {
+                    pageNumber = currentPage - 2 + idx;
+                  }
+                  
+                  // Only render if the calculated page number is valid
+                  if (pageNumber > 0 && pageNumber <= totalPages) {
+                    return (
+                      <Button
+                        key={pageNumber}
+                        variant={currentPage === pageNumber ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNumber)}
+                        className={`h-8 w-8 p-0 ${currentPage === pageNumber ? 'bg-indigo-600 hover:bg-indigo-700' : 'border-gray-200'}`}
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  }
+                  
+                  return null;
+                })}
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 h-8 w-8 border-gray-200"
+                >
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {/* Document grid */}
+          <div className={`grid grid-cols-1 ${viewMode === "grid" ? "md:grid-cols-2 lg:grid-cols-3" : ""} gap-6 mb-8`}>
+            {paginatedDocuments.map((document, index) => (
+              <div 
+                key={document.id}
+                className={`transform transition-all duration-500 hover:scale-[1.02] ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`} 
+                style={{ transitionDelay: `${300 + (index % 3) * 100}ms` }}
+              >
+                <DocumentCard document={document} onDelete={handleDeleteDocument} />
+              </div>
+            ))}
+          </div>
+          
+          {/* Bottom pagination for mobile */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mb-8 md:hidden">
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 h-8 w-8 border-gray-200"
+                >
+                  <ChevronLeft size={16} />
+                </Button>
+                
+                <span className="text-sm text-gray-600 mx-2">
+                  Page {currentPage} of {totalPages}
+                </span>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 h-8 w-8 border-gray-200"
+                >
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
