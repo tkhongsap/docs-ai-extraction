@@ -1,54 +1,65 @@
 [
   {
     "vendor_name": {
-      "value": "FOOD\nPROJECT"
+      "value": "บีเอสดับบิวฟู้ดเซอร์วิส"
     },
     "vendor_address": {
-      "value": "{'houseNumber': '99/1', 'road': 'ถนนวงแหวนอุตสาหกรรม แขวงช่องนนทรี\\nเขตยานนาวา กรุงเทพฯ 10120', 'postalCode': '10120', 'city': 'BANGKOK', 'countryRegion': 'THAILAND.', 'streetAddress': '99/1 ถนนวงแหวนอุตสาหกรรม แขวงช่องนนทรี\\nเขตยานนาวา กรุงเทพฯ 10120'}"
+      "value": "{'houseNumber': '52', 'road': 'ซอย 8 ถนน สา', 'postalCode': '10270', 'city': 'อำเภอ เมือง', 'state': 'จังหวัด สมุทรปราการ', 'streetAddress': '52 ซอย 8 ถนน สา', 'cityDistrict': 'ย', 'house': 'ลวด ตำบล ปากน้ำ'}"
     },
     "vendor_address_recipient": {
-      "value": "บริษัท ฟู้ดโปรเจ็ค (สยาม) จำกัด\nFOOD PROJECT (SIAM) CO., LTD."
+      "value": "บีเอสดับบิวฟู้ดเซอร์วิส"
     },
     "customer_name": {
-      "value": "เม้นท์ จำกัด (สำนักงานใหญ่)"
+      "value": "นาย บริษัท เอ็น.ซี.ซี.แมนเนจเม้นท์ แอนด์ ดิเวลลอปเม้นท์ จำกัด (สำนักงานใหญ่)"
     },
-    "customer_id": {
-      "value": "0010110792"
-    },
+    "customer_id": null,
     "customer_address": {
-      "value": "{'road': 'ถนนรัชดาภิเษก แขวงคลอง', 'postalCode': '10110', 'city': 'ทพมหานคร', 'streetAddress': 'ถนนรัชดาภิเษก แขวงคลอง', 'cityDistrict': 'เตย', 'house': 'เอ็น.ซี.ซี. แมนเนจเม้นท์ แอนด์ ดิเวลลอป\\nศูนย์การประชุมแห่งชาติสิริกิติ์'}"
+      "value": "{'houseNumber': 'เลขที่ 60', 'road': 'ถนนรัชดาภิเษก\\nแขวงคลองเตย', 'postalCode': '10110', 'city': 'กรุงเทพฯ', 'streetAddress': 'เลขที่ 60 ถนนรัชดาภิเษก\\nแขวงคลองเตย', 'cityDistrict': 'เขตคลองเตย', 'house': 'ศูนย์การประชุมแห่งชาติสิริกิติ์'}"
     },
     "customer_address_recipient": {
-      "value": "เม้นท์ จำกัด (สำนักงานใหญ่)"
+      "value": "นาย บริษัท เอ็น.ซี.ซี.แมนเนจเม้นท์ แอนด์ ดิเวลลอปเม้นท์ จำกัด (สำนักงานใหญ่)"
     },
     "invoice_id": {
-      "value": "2501201028084"
+      "value": "FBM00683/ 3"
     },
     "invoice_date": {
-      "value": "2025-01-29"
+      "value": "2025-01-07"
     },
     "invoice_total": {
       "value": {
-        "amount": 3060.2,
+        "amount": 8650,
         "currency_symbol": null
       }
     },
     "due_date": null,
     "purchase_order": {
-      "value": "3013024639"
+      "value": "3014027333"
     },
     "billing_address": null,
     "billing_address_recipient": null,
-    "shipping_address": {
-      "value": "{'streetAddress': '', 'house': '60 ศูนย์การประชุมแห่งชาติสิริกิติ์ 060-0627359'}"
-    },
-    "shipping_address_recipient": {
-      "value": "ศูนย์ประชุม NCC."
-    },
+    "shipping_address": null,
+    "shipping_address_recipient": null,
     "items": [
       {
         "description": {
-          "value": "chicken nuggets 1kg-pckนักเก็ตไก่"
+          "value": "อกไก่300กรัม/ชิ้น"
+        },
+        "quantity": {
+          "value": 77
+        },
+        "unit": {
+          "value": null
+        },
+        "amount": {
+          "value": {
+            "amount": 5390,
+            "currency_symbol": null
+          }
+        }
+      },
+      {
+        "description": {
+          "value": "หมูสามชันหัน"
         },
         "quantity": {
           "value": 20
@@ -56,35 +67,16 @@
         "unit": {
           "value": null
         },
-        "unit_price": {
-          "value": {
-            "amount": 143,
-            "currency_symbol": null
-          }
-        },
-        "product_code": {
-          "value": "V/40610101311511"
-        },
         "amount": {
           "value": {
-            "amount": 2860,
+            "amount": 3260,
             "currency_symbol": null
           }
         }
       }
     ],
-    "subtotal": {
-      "value": {
-        "amount": 2860,
-        "currency_symbol": null
-      }
-    },
-    "total_tax": {
-      "value": {
-        "amount": 200.2,
-        "currency_symbol": null
-      }
-    },
+    "subtotal": null,
+    "total_tax": null,
     "previous_unpaid_balance": null,
     "amount_due": null,
     "service_start_date": null,
