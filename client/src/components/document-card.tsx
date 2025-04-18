@@ -1,7 +1,11 @@
 import { Link } from "wouter";
-import { Download, Trash, FileText, AlertCircle, Clock, CheckCircle } from "lucide-react";
+import { 
+  Download, Trash, FileText, AlertCircle, Clock, CheckCircle,
+  Image, File, Eye, ArrowRight
+} from "lucide-react";
 import { Document } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
 
 interface DocumentCardProps {
   document: Document;
@@ -14,45 +18,49 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
       case "completed":
         return {
           bgColor: "bg-green-500",
-          textColor: "text-green-800",
-          bgLight: "bg-green-100",
-          icon: <CheckCircle className="h-4 w-4 mr-1" />,
+          textColor: "text-green-700",
+          bgLight: "bg-green-50",
+          borderColor: "border-green-200",
+          icon: <CheckCircle className="h-4 w-4 mr-1.5" />,
           label: "Completed"
         };
       case "processing":
         return {
           bgColor: "bg-yellow-500",
-          textColor: "text-yellow-800",
-          bgLight: "bg-yellow-100",
-          icon: <Clock className="h-4 w-4 mr-1 animate-pulse" />,
+          textColor: "text-yellow-700",
+          bgLight: "bg-yellow-50",
+          borderColor: "border-yellow-200",
+          icon: <Clock className="h-4 w-4 mr-1.5 animate-pulse" />,
           label: "Processing"
         };
       case "error":
         return {
           bgColor: "bg-red-500",
-          textColor: "text-red-800",
-          bgLight: "bg-red-100",
-          icon: <AlertCircle className="h-4 w-4 mr-1" />,
+          textColor: "text-red-700",
+          bgLight: "bg-red-50",
+          borderColor: "border-red-200",
+          icon: <AlertCircle className="h-4 w-4 mr-1.5" />,
           label: "Error"
         };
       default:
         return {
           bgColor: "bg-gray-500",
-          textColor: "text-gray-800",
-          bgLight: "bg-gray-100",
-          icon: <FileText className="h-4 w-4 mr-1" />,
+          textColor: "text-gray-700",
+          bgLight: "bg-gray-50",
+          borderColor: "border-gray-200",
+          icon: <FileText className="h-4 w-4 mr-1.5" />,
           label: "Uploaded"
         };
     }
   };
 
-  const getFileIconClass = (fileType: string) => {
+  const getFileIcon = (fileType: string) => {
     if (fileType.includes("pdf")) {
-      return "fas fa-file-pdf text-red-500";
+      return <FileText className="h-16 w-16 text-red-500" />;
     } else if (fileType.includes("image")) {
-      return "fas fa-file-image text-blue-500";
+      return <Image className="h-16 w-16 text-blue-500" />;
     }
-    return "fas fa-file text-gray-500";
+    return <File className="h-16 w-16 text-gray-500" />;
   };
 
   const getDocumentType = (fileName: string, fileType: string) => {
@@ -79,70 +87,79 @@ export default function DocumentCard({ document, onDelete }: DocumentCardProps) 
   const statusInfo = getStatusInfo(document.status);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow duration-200">
-      <div className="h-40 bg-gray-100 relative">
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-all duration-200 hover:border-gray-200 group">
+      <div className="h-44 bg-gray-50 relative flex flex-col items-center justify-center p-6">
         {/* Document thumbnail */}
-        <div className="w-full h-full flex items-center justify-center bg-gray-100">
-          <i className={`${getFileIconClass(document.fileType)} text-4xl`}></i>
+        <div className="mb-2">
+          {getFileIcon(document.fileType)}
+        </div>
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-wider text-gray-500 font-medium">
+            {formatFileType(document.fileType)}
+          </p>
         </div>
         
         {/* Status badge */}
-        <div className={`absolute top-2 right-2 ${statusInfo.bgColor} text-white text-xs px-2 py-1 rounded-full flex items-center`}>
+        <div className={`absolute top-3 right-3 ${statusInfo.bgLight} ${statusInfo.textColor} text-xs px-2.5 py-1 rounded-full flex items-center border ${statusInfo.borderColor}`}>
           {statusInfo.icon}
           {statusInfo.label}
         </div>
       </div>
-      <div className="p-4">
-        <h3 className="font-bold text-gray-800 mb-1 truncate" title={document.originalFilename}>
+      <div className="p-5">
+        <h3 className="font-semibold text-gray-800 mb-1 truncate" title={document.originalFilename}>
           {document.originalFilename}
         </h3>
-        <p className="text-gray-500 text-sm mb-3">
+        <p className="text-gray-500 text-sm mb-4">
           Uploaded {formatDistanceToNow(new Date(document.uploadDate), { addSuffix: true })}
         </p>
-        <div className="flex flex-wrap gap-2 mb-3">
-          <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded flex items-center">
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full font-medium">
             {getDocumentType(document.originalFilename, document.fileType)}
           </span>
-          <span className="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">
-            {formatFileType(document.fileType)}
-          </span>
-          <span className={`${statusInfo.bgLight} ${statusInfo.textColor} text-xs px-2 py-1 rounded flex items-center`}>
-            {statusInfo.icon}
-            {statusInfo.label}
-          </span>
         </div>
-        <div className="flex justify-between">
-          <div className="flex space-x-2">
+        <div className="flex justify-between items-center">
+          <div className="flex space-x-3">
             <button 
-              className={`${document.status === "completed" ? "text-gray-500 hover:text-gray-700" : "text-gray-300 cursor-not-allowed"}`} 
+              className={`p-1.5 rounded-full ${document.status === "completed" ? "text-gray-500 hover:text-gray-700 hover:bg-gray-100" : "text-gray-300 cursor-not-allowed"}`} 
               title="Download"
               disabled={document.status !== "completed"}
             >
               <Download className="h-4 w-4" />
             </button>
             <button 
-              className="text-gray-500 hover:text-red-700" 
+              className="p-1.5 rounded-full text-gray-500 hover:text-red-600 hover:bg-red-50" 
               title="Delete"
               onClick={() => onDelete && onDelete(document.id)}
             >
               <Trash className="h-4 w-4" />
             </button>
           </div>
+          
           {document.status === "completed" ? (
-            <Link href={`/review/${document.id}`} className="text-primary text-sm font-medium hover:underline flex items-center">
-              View Details
+            <Link href={`/review/${document.id}`}>
+              <Button size="sm" variant="outline" className="group-hover:bg-primary group-hover:text-white transition-colors">
+                <Eye className="h-3.5 w-3.5 mr-1.5" />
+                View Details
+              </Button>
             </Link>
           ) : document.status === "processing" ? (
-            <Link href={`/processing`} className="text-yellow-600 text-sm font-medium hover:underline flex items-center">
-              View Progress
+            <Link href={`/processing`}>
+              <Button size="sm" variant="outline" className="border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100">
+                <Clock className="h-3.5 w-3.5 mr-1.5" />
+                View Progress
+              </Button>
             </Link>
           ) : document.status === "error" ? (
-            <span className="text-red-500 text-sm font-medium flex items-center">
-              <AlertCircle className="h-3 w-3 mr-1" /> Error
-            </span>
+            <Button size="sm" variant="outline" className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 cursor-default">
+              <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
+              Error
+            </Button>
           ) : (
-            <Link href={`/processing`} className="text-primary text-sm font-medium hover:underline flex items-center">
-              Process
+            <Link href={`/processing`}>
+              <Button size="sm" className="gap-1.5">
+                Process
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
             </Link>
           )}
         </div>

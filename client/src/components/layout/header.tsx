@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
-import { CircleHelp, User } from "lucide-react";
+import { CircleHelp, User, LayoutDashboard, FileText, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/ui/logo";
 
 export default function Header() {
   const [location] = useLocation();
@@ -10,42 +11,41 @@ export default function Header() {
   };
   
   return (
-    <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-10">
+    <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-10 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
-              <i className="fas fa-file-alt text-primary text-2xl mr-2"></i>
-              <span className="font-bold text-xl">OCR Extract</span>
+              <Logo />
             </Link>
           </div>
           
-          <nav className="hidden md:flex space-x-6">
-            <Link 
-              href="/"
-              className={isActive("/") ? "text-primary font-medium" : "text-gray-600 hover:text-primary"}
-            >
-              Dashboard
+          <nav className="hidden md:flex space-x-1">
+            <Link href="/">
+              <Button variant={isActive("/") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+                <LayoutDashboard className="h-4 w-4" />
+                Dashboard
+              </Button>
             </Link>
-            <Link 
-              href="/documents"
-              className={isActive("/documents") ? "text-primary font-medium" : "text-gray-600 hover:text-primary"}
-            >
-              Documents
+            <Link href="/documents">
+              <Button variant={isActive("/documents") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+                <FileText className="h-4 w-4" />
+                Documents
+              </Button>
             </Link>
-            <Link 
-              href="/upload"
-              className={isActive("/upload") ? "text-primary font-medium" : "text-gray-600 hover:text-primary"}
-            >
-              Upload
+            <Link href="/upload">
+              <Button variant={isActive("/upload") ? "default" : "ghost"} className="flex items-center gap-2 font-medium">
+                <Upload className="h-4 w-4" />
+                Upload
+              </Button>
             </Link>
           </nav>
           
-          <div className="flex items-center">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <CircleHelp className="text-gray-600" />
+          <div className="flex items-center space-x-2">
+            <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/10">
+              <CircleHelp className="h-5 w-5 text-primary" />
             </Button>
-            <div className="ml-4 relative">
+            <div className="relative">
               <Button variant="outline" size="icon" className="rounded-full border-2 border-primary text-primary">
                 <User className="h-5 w-5" />
               </Button>
