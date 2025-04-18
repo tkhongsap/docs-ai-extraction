@@ -391,42 +391,136 @@ def extract_invoice_data(file_content):
             "handwrittenNotes": 0.0  # Azure doesn't explicitly handle handwritten notes
         }
         
-        # Create a standardized response structure - match EXACTLY the format in json_ms_azure.json
-        standardized_response = {
+        # Create a response in the format matching the example/ms_azure_response.txt
+        # This format matches what Azure Document Intelligence returns
+        standardized_response = [{
+            "vendor_name": {
+                "value": extracted_data.get("vendorName", "")
+            },
+            "vendor_address": {
+                "value": extracted_data.get("vendorAddress", "")
+            },
+            "vendor_address_recipient": {
+                "value": extracted_data.get("vendorContact", "")
+            },
+            "customer_name": {
+                "value": extracted_data.get("clientName", "")
+            },
+            "customer_id": {
+                "value": ""
+            },
+            "customer_address": {
+                "value": extracted_data.get("clientAddress", "")
+            },
+            "customer_address_recipient": {
+                "value": ""
+            },
+            "invoice_id": {
+                "value": extracted_data.get("invoiceNumber", "")
+            },
+            "invoice_date": {
+                "value": extracted_data.get("invoiceDate").isoformat() if isinstance(extracted_data.get("invoiceDate"), datetime) else extracted_data.get("invoiceDate", "")
+            },
+            "invoice_total": {
+                "value": {
+                    "amount": float(extracted_data.get("totalAmount", 0)) if extracted_data.get("totalAmount") else 0,
+                    "currency_symbol": None
+                }
+            },
+            "due_date": None if not extracted_data.get("dueDate") else {
+                "value": extracted_data.get("dueDate").isoformat() if isinstance(extracted_data.get("dueDate"), datetime) else extracted_data.get("dueDate", "")
+            },
+            "purchase_order": {
+                "value": ""
+            },
+            "billing_address": None,
+            "billing_address_recipient": None,
+            "shipping_address": {
+                "value": ""
+            },
+            "shipping_address_recipient": {
+                "value": ""
+            },
+            "items": [],
+            "subtotal": {
+                "value": {
+                    "amount": float(extracted_data.get("subtotalAmount", 0)) if extracted_data.get("subtotalAmount") else 0,
+                    "currency_symbol": None
+                }
+            },
+            "total_tax": {
+                "value": {
+                    "amount": float(extracted_data.get("taxAmount", 0)) if extracted_data.get("taxAmount") else 0,
+                    "currency_symbol": None
+                }
+            },
+            "previous_unpaid_balance": None,
+            "amount_due": None,
+            "service_start_date": None,
+            "service_end_date": None,
+            "service_address": None,
+            "service_address_recipient": None,
+            "remittance_address": None,
+            "remittance_address_recipient": None,
+            
+            # Additional fields for our system
+            "status": "success"
+        }]
+        
+        # Add line items
+        for item in extracted_data.get("lineItems", []):
+            formatted_item = {
+                "description": {
+                    "value": item.get("description", "")
+                },
+                "quantity": {
+                    "value": float(item.get("quantity", 0))
+                },
+                "unit": {
+                    "value": None
+                },
+                "unit_price": {
+                    "value": {
+                        "amount": float(item.get("unitPrice", 0)),
+                        "currency_symbol": None
+                    }
+                },
+                "product_code": {
+                    "value": item.get("itemCode", "")
+                },
+                "amount": {
+                    "value": {
+                        "amount": float(item.get("amount", 0)),
+                        "currency_symbol": None
+                    }
+                }
+            }
+            standardized_response[0]["items"].append(formatted_item)
+        
+        # Convert back to the internal format for markdown generation
+        internal_format = {
             "vendorName": extracted_data.get("vendorName", ""),
             "vendorAddress": extracted_data.get("vendorAddress", ""),
             "vendorContact": extracted_data.get("vendorContact", ""),
             "clientName": extracted_data.get("clientName", ""),
             "clientAddress": extracted_data.get("clientAddress", ""),
             "invoiceNumber": extracted_data.get("invoiceNumber", ""),
+            "invoiceDate": extracted_data.get("invoiceDate", ""),
+            "dueDate": extracted_data.get("dueDate", ""),
             "totalAmount": extracted_data.get("totalAmount", 0),
+            "subtotalAmount": extracted_data.get("subtotalAmount", 0),
+            "taxAmount": extracted_data.get("taxAmount", 0),
             "currency": extracted_data.get("currency", ""),
-            "paymentTerms": "",
-            "paymentMethod": "",
             "lineItems": extracted_data.get("lineItems", []),
-            "handwrittenNotes": extracted_data.get("handwrittenNotes", []),
-            "additionalInfo": "",
-            "confidenceScores": {
-                "overall": 80,
-                "vendorInfo": 80,
-                "invoiceDetails": 80,
-                "lineItems": 80,
-                "totals": 80,
-                "handwrittenNotes": 50,
-                "fieldSpecific": {}
-            },
-            "layoutData": [],
-            "processingMetadata": {
-                "ocrEngine": "ms-document-intelligence",
-                "processingTime": 0,
-                "processingTimestamp": datetime.now().isoformat(),
-                "documentClassification": "invoice"
-            }
+            "handwrittenNotes": extracted_data.get("handwrittenNotes", [])
         }
         
         # Generate markdown output
-        markdown_output = generate_markdown_from_extraction(standardized_response)
-        standardized_response["markdownOutput"] = markdown_output
+        markdown_output = generate_markdown_from_extraction(internal_format)
+        
+        # Add our custom fields needed by the frontend
+        standardized_response[0]["markdownOutput"] = markdown_output
+        standardized_response[0]["auto_navigation"] = True
         
         # Return the standardized_response as a dictionary instead of a JSON string
         # This allows the FastAPI to properly serialize it
@@ -436,43 +530,39 @@ def extract_invoice_data(file_content):
         error_message = str(e)
         print(f"Azure Document Intelligence error: {error_message}")
         
-        # Create standardized error response
-        error_response = {
-            "vendorName": "",
+        # Create error response in the same format as success but with error details
+        internal_error = {
+            "vendorName": "Error processing document",
             "vendorAddress": "",
             "vendorContact": "",
             "clientName": "",
             "clientAddress": "",
-            "invoiceNumber": "",
+            "invoiceNumber": "Error",
             "totalAmount": 0,
             "currency": "",
-            "paymentTerms": "",
-            "paymentMethod": "",
             "lineItems": [],
             "handwrittenNotes": [],
-            "additionalInfo": "",
-            "confidenceScores": {
-                "overall": 80,
-                "vendorInfo": 80,
-                "invoiceDetails": 80,
-                "lineItems": 80,
-                "totals": 80,
-                "handwrittenNotes": 50,
-                "fieldSpecific": {}
-            },
-            "layoutData": [],
-            "processingMetadata": {
-                "ocrEngine": "ms-document-intelligence",
-                "processingTime": 0,
-                "processingTimestamp": datetime.now().isoformat(),
-                "documentClassification": "invoice",
-                "error": f"Azure Document Intelligence error: {error_message}"
-            }
+            "additionalInfo": f"Error: {error_message}"
         }
         
         # Generate markdown output for error case
-        markdown_output = generate_markdown_from_extraction(error_response)
-        error_response["markdownOutput"] = markdown_output
+        markdown_output = generate_markdown_from_extraction(internal_error)
         
-        # Return the error_response as a dictionary 
+        # Create error response in the format that matches Azure Document Intelligence output
+        error_response = [{
+            "vendor_name": {"value": "Error processing document"},
+            "vendor_address": {"value": ""},
+            "customer_name": {"value": ""},
+            "customer_address": {"value": ""},
+            "invoice_id": {"value": "Error"},
+            "invoice_date": {"value": ""},
+            "invoice_total": {"value": {"amount": 0, "currency_symbol": null}},
+            "items": [],
+            "status": "error",
+            "error": f"Azure Document Intelligence error: {error_message}",
+            "markdownOutput": markdown_output,
+            "auto_navigation": False
+        }]
+        
+        # Return the error_response as a list with a single dictionary
         return error_response
