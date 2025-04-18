@@ -42,7 +42,8 @@ Make sure to:
 3. Provide numeric values without currency symbols
 4. Format dates in ISO format (YYYY-MM-DD)
 5. Include empty arrays if no line items or notes are present
-6.f any item was crossed out but replaced with a handwritten correction, use the new corrected value and exclude the crossed-out version.
-
+6.If any item was crossed out but replaced with a handwritten correction, use the new corrected value and exclude the crossed-out version
+    
+This document may be entirely or partially in Thai or English, and it may contain handwritten text. Carefully extract the information, ignoring any crossed-out or struck-through items
 Return ONLY the JSON with no additional text.
 """
