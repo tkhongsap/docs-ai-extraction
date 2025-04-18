@@ -91,7 +91,7 @@ def extract_invoice_data(file_content, content_type):
             
             # Call the OpenAI API with the image and timeout
             response = openai.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1-mini",
                 messages=[
                     {
                         "role": "user",
