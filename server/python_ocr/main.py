@@ -347,11 +347,76 @@ async def process_with_azure(file: UploadFile = File(...)):
             # Log the raw response for debugging (first 200 chars)
             print(f"Azure raw response from main.py: {str(extracted_data)[:200]}...")
             
-            # The Azure handler now returns a dictionary directly
-            # We don't need to parse JSON string anymore
+            # The Azure handler now returns a list of dictionaries
+            # We need to convert to our standard format
             
-            # Add additional fields to ensure compatibility with other OCR responses
-            if isinstance(extracted_data, dict):
+            if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                # We got data in Azure format, need to convert to our application format
+                print("Converting Azure list response to application format...")
+                
+                azure_data = extracted_data[0]  # Take the first invoice
+                
+                # Create our standard response format
+                standard_response = {
+                    "documentInfo": {
+                        "vendor": azure_data.get("vendor_name", {}).get("value", "") if azure_data.get("vendor_name") else "",
+                        "vendorAddress": azure_data.get("vendor_address", {}).get("value", "") if azure_data.get("vendor_address") else "",
+                        "vendorContact": azure_data.get("vendor_address_recipient", {}).get("value", "") if azure_data.get("vendor_address_recipient") else "",
+                        "client": azure_data.get("customer_name", {}).get("value", "") if azure_data.get("customer_name") else "",
+                        "clientAddress": azure_data.get("customer_address", {}).get("value", "") if azure_data.get("customer_address") else "",
+                        "invoiceNumber": azure_data.get("invoice_id", {}).get("value", "") if azure_data.get("invoice_id") else "",
+                        "invoiceDate": azure_data.get("invoice_date", {}).get("value", "") if azure_data.get("invoice_date") else None,
+                        "dueDate": azure_data.get("due_date", {}).get("value", "") if azure_data.get("due_date") else None,
+                        "totalAmount": azure_data.get("invoice_total", {}).get("value", {}).get("amount", 0) if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else 0,
+                        "subtotalAmount": azure_data.get("subtotal", {}).get("value", {}).get("amount", 0) if azure_data.get("subtotal") and azure_data.get("subtotal").get("value") else None,
+                        "taxAmount": azure_data.get("total_tax", {}).get("value", {}).get("amount", 0) if azure_data.get("total_tax") and azure_data.get("total_tax").get("value") else None,
+                        "currency": azure_data.get("invoice_total", {}).get("value", {}).get("currency_symbol", "") if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else "",
+                        "paymentTerms": "",
+                        "paymentMethod": ""
+                    },
+                    "lineItems": [],
+                    "handwrittenNotes": [],
+                    "additionalInfo": "",
+                    "metadata": {
+                        "ocrEngine": "ms-document-intelligence",
+                        "processingTime": 0,
+                        "processingTimestamp": datetime.now().isoformat(),
+                        "documentClassification": "invoice"
+                    },
+                    "confidenceScores": {
+                        "overall": 80,
+                        "vendorInfo": 80,
+                        "invoiceDetails": 80,
+                        "lineItems": 80,
+                        "totals": 80,
+                        "handwrittenNotes": 50,
+                        "fieldSpecific": {}
+                    }
+                }
+                
+                # Convert line items
+                if "items" in azure_data and isinstance(azure_data["items"], list):
+                    for item in azure_data["items"]:
+                        line_item = {
+                            "description": item.get("description", {}).get("value", "") if item.get("description") else "",
+                            "quantity": item.get("quantity", {}).get("value", 0) if item.get("quantity") else 0,
+                            "unitPrice": item.get("unit_price", {}).get("value", {}).get("amount", 0) if item.get("unit_price") and item.get("unit_price").get("value") else 0,
+                            "amount": item.get("amount", {}).get("value", {}).get("amount", 0) if item.get("amount") and item.get("amount").get("value") else 0,
+                            "itemCode": item.get("product_code", {}).get("value", "") if item.get("product_code") else "",
+                        }
+                        standard_response["lineItems"].append(line_item)
+                
+                # Add the markdown output if available
+                if "markdownOutput" in azure_data:
+                    standard_response["markdownOutput"] = azure_data["markdownOutput"]
+                
+                print(f"Converted response: {str(standard_response)[:200]}...")
+                
+                # Return the converted response
+                return JSONResponse(content=standard_response)
+                
+            elif isinstance(extracted_data, dict):
+                # Handle dictionary response (older format or error format)
                 # Ensure date fields are properly formatted
                 for date_field in ['invoiceDate', 'dueDate']:
                     if date_field in extracted_data and extracted_data[date_field]:
@@ -372,6 +437,7 @@ async def process_with_azure(file: UploadFile = File(...)):
                 
                 # Return properly structured data
                 return JSONResponse(content=extracted_data)
+                
             elif isinstance(extracted_data, str):
                 # Fallback for old responses that might still return strings
                 try:
@@ -381,23 +447,41 @@ async def process_with_azure(file: UploadFile = File(...)):
                     print(f"JSON decode error in main.py (Azure): {str(e)}")
                     # If not JSON, return raw text with error details
                     return JSONResponse(content={
-                        "vendorName": "Could not extract vendor name",
-                        "invoiceNumber": "Unknown",
-                        "totalAmount": 0,
+                        "documentInfo": {
+                            "vendor": "Could not extract vendor name",
+                            "invoiceNumber": "Unknown",
+                            "totalAmount": 0
+                        },
                         "lineItems": [],
                         "handwrittenNotes": [],
-                        "error": f"Failed to parse Azure response: {str(e)}",
-                        "status": "error",
+                        "additionalInfo": f"Failed to parse Azure response: {str(e)}",
+                        "metadata": {
+                            "ocrEngine": "ms-document-intelligence",
+                            "processingTime": 0,
+                            "processingTimestamp": datetime.now().isoformat(),
+                            "documentClassification": "error",
+                            "error": f"Failed to parse Azure response: {str(e)}"
+                        },
                         "rawText": extracted_data[:200] + "..." if len(extracted_data) > 200 else extracted_data
                     })
             else:
                 # Unexpected response type
                 return JSONResponse(content={
-                    "vendorName": "Error in Azure processing",
-                    "invoiceNumber": "Unknown",
-                    "totalAmount": 0,
-                    "status": "error",
-                    "error": "Unexpected response type from Azure OCR module"
+                    "documentInfo": {
+                        "vendor": "Error in Azure processing",
+                        "invoiceNumber": "Unknown",
+                        "totalAmount": 0
+                    },
+                    "lineItems": [],
+                    "handwrittenNotes": [],
+                    "additionalInfo": "Unexpected response type from Azure OCR module",
+                    "metadata": {
+                        "ocrEngine": "ms-document-intelligence",
+                        "processingTime": 0,
+                        "processingTimestamp": datetime.now().isoformat(),
+                        "documentClassification": "error",
+                        "error": "Unexpected response type from Azure OCR module"
+                    }
                 })
         except Exception as service_error:
             # Handle any errors from the Azure OCR service
