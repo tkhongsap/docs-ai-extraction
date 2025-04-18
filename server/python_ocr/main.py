@@ -487,17 +487,43 @@ async def process_with_azure(file: UploadFile = File(...)):
             # Handle any errors from the Azure OCR service
             print(f"Azure service error: {str(service_error)}")
             
-            # Create a structured error response
+            # Create a structured error response that matches the expected format
             error_response = {
-                "vendorName": "Error occurred",
-                "invoiceNumber": "Error",
-                "totalAmount": 0,
-                "currency": "Unknown",
+                "documentInfo": {
+                    "vendor": "Error occurred",
+                    "vendorAddress": "",
+                    "vendorContact": "",
+                    "client": "",
+                    "clientAddress": "",
+                    "invoiceNumber": "Error",
+                    "invoiceDate": None,
+                    "dueDate": None,
+                    "totalAmount": 0,
+                    "subtotalAmount": None,
+                    "taxAmount": None,
+                    "currency": "Unknown",
+                    "paymentTerms": "",
+                    "paymentMethod": ""
+                },
                 "lineItems": [],
                 "handwrittenNotes": [],
-                "error": f"Azure OCR service error: {str(service_error)}",
-                "status": "error",
-                "confidence": 0
+                "additionalInfo": f"Azure OCR service error: {str(service_error)}",
+                "metadata": {
+                    "ocrEngine": "ms-document-intelligence",
+                    "processingTime": 0,
+                    "processingTimestamp": datetime.now().isoformat(),
+                    "documentClassification": "error",
+                    "error": f"Azure OCR service error: {str(service_error)}"
+                },
+                "confidenceScores": {
+                    "overall": 0,
+                    "vendorInfo": 0,
+                    "invoiceDetails": 0,
+                    "lineItems": 0,
+                    "totals": 0,
+                    "handwrittenNotes": 0,
+                    "fieldSpecific": {}
+                }
             }
             
             return JSONResponse(content=error_response)
