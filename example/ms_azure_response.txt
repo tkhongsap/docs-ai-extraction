@@ -74,7 +74,7 @@
           }
         }
       }
-    ],
+    ],  
     "subtotal": null,
     "total_tax": null,
     "previous_unpaid_balance": null,
