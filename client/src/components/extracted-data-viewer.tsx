@@ -11,11 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { 
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
-  TooltipTrigger 
+  TooltipTrigger
 } from "@/components/ui/tooltip";
 import {
   Collapsible,
@@ -43,13 +43,13 @@ const getAverageConfidence = (extraction: Extraction): number => {
     return 0;
   }
   return Math.round(
-    extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / 
+    extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) /
     extraction.handwrittenNotes.length
   );
 };
 
-export default function ExtractedDataViewer({ 
-  extraction: initialExtraction, 
+export default function ExtractedDataViewer({
+  extraction: initialExtraction,
   documentId,
   onDataUpdated,
   documentScrollPosition
@@ -60,26 +60,26 @@ export default function ExtractedDataViewer({
   const [showExportMenu, setShowExportMenu] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   // Fetch document information
   const { data: document } = useQuery<Document>({
     queryKey: [`/api/documents/${documentId}`],
     enabled: !!documentId,
   });
-  
+
   // References for scroll sync
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Sync scrolling with document viewer
   useEffect(() => {
     if (containerRef.current && typeof documentScrollPosition === 'number') {
       const { scrollHeight, clientHeight } = containerRef.current;
       const scrollTop = ((scrollHeight - clientHeight) * documentScrollPosition) / 100;
-      
+
       containerRef.current.scrollTop = scrollTop;
     }
   }, [documentScrollPosition]);
-  
+
   // Handle updating the extraction data
   const updateExtractionMutation = useMutation({
     mutationFn: async (updatedExtraction: Extraction) => {
@@ -90,27 +90,27 @@ export default function ExtractedDataViewer({
         },
         body: JSON.stringify(updatedExtraction),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update extraction data');
       }
-      
+
       return await response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: [`/api/extractions/document/${documentId}`]
       });
-      
+
       if (onDataUpdated) {
         onDataUpdated(data);
       }
-      
+
       toast({
         title: "Changes Saved",
         description: "Extraction data has been updated successfully.",
       });
-      
+
       setIsEditing(false);
     },
     onError: (error) => {
@@ -121,7 +121,7 @@ export default function ExtractedDataViewer({
       });
     }
   });
-  
+
   const handleExport = async (format: "markdown" | "json") => {
     try {
       setShowExportMenu(false);
@@ -136,15 +136,15 @@ export default function ExtractedDataViewer({
       });
     }
   };
-  
+
   const toggleEdit = () => {
     setIsEditing(!isEditing);
   };
-  
+
   const handleSave = () => {
     updateExtractionMutation.mutate(extraction);
   };
-  
+
   // Handle form field changes
   const handleChange = (field: keyof Extraction, value: any) => {
     setExtraction(prev => ({
@@ -152,23 +152,23 @@ export default function ExtractedDataViewer({
       [field]: value
     }));
   };
-  
+
   // Handle line item changes
   const handleLineItemChange = (index: number, field: keyof LineItem, value: any) => {
     if (!extraction.lineItems) return;
-    
+
     const updatedLineItems = [...extraction.lineItems];
     updatedLineItems[index] = {
       ...updatedLineItems[index],
       [field]: field === 'description' ? value : Number(value)
     };
-    
+
     setExtraction(prev => ({
       ...prev,
       lineItems: updatedLineItems
     }));
   };
-  
+
   // Add a new line item
   const addLineItem = () => {
     const newLineItem: LineItem = {
@@ -177,66 +177,74 @@ export default function ExtractedDataViewer({
       unitPrice: 0,
       amount: 0
     };
-    
+
     setExtraction(prev => ({
       ...prev,
       lineItems: [...(prev.lineItems || []), newLineItem]
     }));
   };
-  
+
   // Remove a line item
   const removeLineItem = (index: number) => {
     if (!extraction.lineItems) return;
-    
+
     const updatedLineItems = extraction.lineItems.filter((_, i) => i !== index);
-    
+
     setExtraction(prev => ({
       ...prev,
       lineItems: updatedLineItems
     }));
   };
-  
+
   // Handle handwritten note changes
   const handleNoteChange = (index: number, field: keyof HandwrittenNote, value: any) => {
     if (!extraction.handwrittenNotes) return;
-    
+
     const updatedNotes = [...extraction.handwrittenNotes];
     updatedNotes[index] = {
       ...updatedNotes[index],
       [field]: field === 'text' ? value : Number(value)
     };
-    
+
     setExtraction(prev => ({
       ...prev,
       handwrittenNotes: updatedNotes
     }));
   };
-  
+
   // Add a new handwritten note
   const addHandwrittenNote = () => {
     const newNote: HandwrittenNote = {
       text: '',
       confidence: 75
     };
-    
+
     setExtraction(prev => ({
       ...prev,
       handwrittenNotes: [...(prev.handwrittenNotes || []), newNote]
     }));
   };
-  
+
   // Remove a handwritten note
   const removeHandwrittenNote = (index: number) => {
     if (!extraction.handwrittenNotes) return;
-    
+
     const updatedNotes = extraction.handwrittenNotes.filter((_, i) => i !== index);
-    
+
     setExtraction(prev => ({
       ...prev,
       handwrittenNotes: updatedNotes
     }));
   };
-  
+
+  const formatDate = (date: Date | null): string => {
+    if (!date) return "Not extracted";
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex justify-between items-center mb-4">
@@ -268,7 +276,7 @@ export default function ExtractedDataViewer({
               <Edit className="h-4 w-4 mr-1" /> Edit
             </Button>
           )}
-          
+
           <div className="relative">
             <Button
               variant="default"
@@ -277,7 +285,7 @@ export default function ExtractedDataViewer({
             >
               <Download className="h-4 w-4 mr-1" /> Export
             </Button>
-            
+
             {/* Export Menu Dropdown */}
             {showExportMenu && (
               <div className="absolute mt-2 right-0 z-10 bg-white border border-gray-200 rounded-md shadow-md w-32">
@@ -304,35 +312,35 @@ export default function ExtractedDataViewer({
           </div>
         </div>
       </div>
-      
+
       <Tabs defaultValue="invoice-details" value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4 w-full justify-start space-x-6 border-b rounded-none h-auto p-0">
-          <TabsTrigger 
-            value="invoice-details" 
+          <TabsTrigger
+            value="invoice-details"
             className="data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent px-1 py-2 rounded-none"
           >
             Invoice Details
           </TabsTrigger>
-          <TabsTrigger 
-            value="line-items" 
+          <TabsTrigger
+            value="line-items"
             className="data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent px-1 py-2 rounded-none"
           >
             Line Items
           </TabsTrigger>
-          <TabsTrigger 
-            value="handwritten-notes" 
+          <TabsTrigger
+            value="handwritten-notes"
             className="data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent px-1 py-2 rounded-none"
           >
             Handwritten Notes
           </TabsTrigger>
-          <TabsTrigger 
-            value="metadata" 
+          <TabsTrigger
+            value="metadata"
             className="data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent px-1 py-2 rounded-none"
           >
             Metadata
           </TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="invoice-details" className="mt-0">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -350,7 +358,7 @@ export default function ExtractedDataViewer({
                   </div>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Number</label>
                 {isEditing ? (
@@ -365,7 +373,7 @@ export default function ExtractedDataViewer({
                   </div>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
                 {isEditing ? (
@@ -377,11 +385,11 @@ export default function ExtractedDataViewer({
                   />
                 ) : (
                   <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    {extraction.invoiceDate ? new Date(extraction.invoiceDate).toLocaleDateString() : "Not extracted"}
+                    {extraction.invoiceDate ? formatDate(new Date(extraction.invoiceDate)) : "Not extracted"}
                   </div>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
                 {isEditing ? (
@@ -393,12 +401,12 @@ export default function ExtractedDataViewer({
                   />
                 ) : (
                   <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    {extraction.dueDate ? new Date(extraction.dueDate).toLocaleDateString() : "Not extracted"}
+                    {extraction.dueDate ? formatDate(new Date(extraction.dueDate)) : "Not extracted"}
                   </div>
                 )}
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Subtotal</label>
@@ -413,11 +421,11 @@ export default function ExtractedDataViewer({
                   />
                 ) : (
                   <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    {extraction.totalAmount ? `$${extraction.totalAmount}` : "Not extracted"}
+                    {extraction.totalAmount ? `${extraction.totalAmount}` : "Not extracted"}
                   </div>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tax</label>
                 {isEditing ? (
@@ -431,11 +439,11 @@ export default function ExtractedDataViewer({
                   />
                 ) : (
                   <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50">
-                    {extraction.taxAmount ? `$${extraction.taxAmount}` : "Not extracted"}
+                    {extraction.taxAmount ? `${extraction.taxAmount}` : "Not extracted"}
                   </div>
                 )}
               </div>
-              
+
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
                 {isEditing ? (
@@ -449,18 +457,18 @@ export default function ExtractedDataViewer({
                   />
                 ) : (
                   <div className="border border-gray-300 rounded-md px-3 py-2 bg-gray-50 font-bold">
-                    {extraction.totalAmount ? `$${extraction.totalAmount}` : "Not extracted"}
+                    {extraction.totalAmount ? `${extraction.totalAmount}` : "Not extracted"}
                   </div>
                 )}
               </div>
             </div>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="line-items" className="mt-0">
           {isEditing && (
             <div className="mb-4">
-              <Button 
+              <Button
                 onClick={addLineItem}
                 size="sm"
                 variant="outline"
@@ -469,7 +477,7 @@ export default function ExtractedDataViewer({
               </Button>
             </div>
           )}
-          
+
           {extraction.lineItems && extraction.lineItems.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -523,7 +531,7 @@ export default function ExtractedDataViewer({
                             step="0.01"
                           />
                         ) : (
-                          `$${item.unitPrice.toFixed(2)}`
+                          `${item.unitPrice.toFixed(2)}`
                         )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -537,7 +545,7 @@ export default function ExtractedDataViewer({
                             step="0.01"
                           />
                         ) : (
-                          `$${item.amount.toFixed(2)}`
+                          `${item.amount.toFixed(2)}`
                         )}
                       </td>
                       {isEditing && (
@@ -562,11 +570,11 @@ export default function ExtractedDataViewer({
             </div>
           )}
         </TabsContent>
-        
+
         <TabsContent value="handwritten-notes" className="mt-0">
           {isEditing && (
             <div className="mb-4">
-              <Button 
+              <Button
                 onClick={addHandwrittenNote}
                 size="sm"
                 variant="outline"
@@ -575,7 +583,7 @@ export default function ExtractedDataViewer({
               </Button>
             </div>
           )}
-          
+
           {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? (
             <div className="space-y-3">
               {extraction.handwrittenNotes.map((note, index) => (
@@ -614,8 +622,8 @@ export default function ExtractedDataViewer({
                       <p className="text-gray-800">{note.text}</p>
                       <div className="mt-1 flex items-center">
                         <div className="h-2 w-full bg-gray-200 rounded-full">
-                          <div 
-                            className="h-2 bg-green-500 rounded-full" 
+                          <div
+                            className="h-2 bg-green-500 rounded-full"
                             style={{ width: `${note.confidence}%` }}
                           ></div>
                         </div>
@@ -632,7 +640,7 @@ export default function ExtractedDataViewer({
             </div>
           )}
         </TabsContent>
-        
+
         <TabsContent value="metadata" className="mt-0" ref={containerRef}>
           <div className="space-y-4">
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
@@ -653,7 +661,7 @@ export default function ExtractedDataViewer({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Document ID</p>
@@ -692,7 +700,7 @@ export default function ExtractedDataViewer({
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-md font-semibold">OCR Confidence Metrics</h3>
@@ -712,24 +720,24 @@ export default function ExtractedDataViewer({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              
+
               <div className="space-y-4">
                 {/* Average Confidence */}
                 <div>
                   <div className="flex justify-between mb-1">
                     <p className="text-sm text-gray-500">Average Confidence Score</p>
                     <p className="text-sm font-medium">
-                      {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 
+                      {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0
                         ? `${Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length)}%`
                         : 'N/A'}
                     </p>
                   </div>
-                  
+
                   {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 && (
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div 
-                        className="h-2.5 rounded-full" 
-                        style={{ 
+                      <div
+                        className="h-2.5 rounded-full"
+                        style={{
                           width: `${Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length)}%`,
                           backgroundColor: getConfidenceColor(Math.round(extraction.handwrittenNotes.reduce((acc, note) => acc + note.confidence, 0) / extraction.handwrittenNotes.length))
                         }}
@@ -737,7 +745,7 @@ export default function ExtractedDataViewer({
                     </div>
                   )}
                 </div>
-                
+
                 {/* Confidence by field type */}
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <div>
@@ -761,20 +769,20 @@ export default function ExtractedDataViewer({
                   <div>
                     <p className="text-sm text-gray-500">Handwriting</p>
                     <div className="flex items-center">
-                      <Badge className={`${extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
-                        (getAverageConfidence(extraction) > 80 ? "bg-green-100 text-green-800 border-green-200" : 
-                        getAverageConfidence(extraction) > 60 ? "bg-yellow-100 text-yellow-800 border-yellow-200" : 
-                        "bg-red-100 text-red-800 border-red-200") : 
+                      <Badge className={`${extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ?
+                        (getAverageConfidence(extraction) > 80 ? "bg-green-100 text-green-800 border-green-200" :
+                        getAverageConfidence(extraction) > 60 ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                        "bg-red-100 text-red-800 border-red-200") :
                         "bg-gray-100 text-gray-800 border-gray-200"} mr-2`}>
-                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
-                          (getAverageConfidence(extraction) > 80 ? "High" : 
-                          getAverageConfidence(extraction) > 60 ? "Medium" : 
-                          "Low") : 
+                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ?
+                          (getAverageConfidence(extraction) > 80 ? "High" :
+                          getAverageConfidence(extraction) > 60 ? "Medium" :
+                          "Low") :
                           "N/A"}
                       </Badge>
                       <span className="text-sm">
-                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ? 
-                          `${getAverageConfidence(extraction)}%` : 
+                        {extraction.handwrittenNotes && extraction.handwrittenNotes.length > 0 ?
+                          `${getAverageConfidence(extraction)}%` :
                           "N/A"}
                       </span>
                     </div>
@@ -782,13 +790,13 @@ export default function ExtractedDataViewer({
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
               <h3 className="text-md font-semibold mb-3">Processing Information</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Extract Date</p>
-                  <p className="text-sm font-medium">{new Date().toLocaleDateString()}</p>
+                  <p className="text-sm font-medium">{formatDate(new Date())}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Status</p>
