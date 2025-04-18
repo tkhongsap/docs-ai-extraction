@@ -84,7 +84,11 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
         <iframe 
           src={`${fileUrl}#zoom=${zoom/100}`} 
           className="w-full h-full border-0"
-          style={{ transform: `rotate(${rotation}deg)` }}
+          style={{ 
+            transform: `rotate(${rotation}deg)`,
+            height: "100%",
+            display: "block"
+          }}
           title={document.originalFilename}
         />
       );
@@ -203,10 +207,10 @@ export default function DocumentPreview({ document, onScroll }: DocumentPreviewP
       {/* Document Preview */}
       <div 
         ref={containerRef}
-        className="border border-gray-200 rounded-lg overflow-auto bg-gray-100 h-[500px] flex items-center justify-center"
+        className="border border-gray-200 rounded-lg overflow-auto bg-gray-100 h-[700px] flex items-center justify-center"
         onScroll={handleScroll}
       >
-        <div className="min-h-full min-w-full flex items-center justify-center p-4">
+        <div className="h-full w-full flex items-center justify-center">
           {renderPreviewContent()}
         </div>
       </div>
