@@ -6,15 +6,14 @@ This module handles document OCR processing using Azure Document Intelligence.
 
 import os
 import json
-import requests
 from datetime import datetime
 from dotenv import load_dotenv
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.documentintelligence import DocumentIntelligenceClient
+from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
 
 # Load environment variables
 load_dotenv(override=True)
-
-# Don't get API credentials globally 
-# We'll get them inside the function instead to ensure they're always fresh
 
 def generate_markdown_from_extraction(data):
     """
@@ -119,21 +118,6 @@ def generate_markdown_from_extraction(data):
     # Join all lines with newlines
     return "\n".join(md)
 
-def format_currency(currency_value):
-    """Format currency value from Azure response"""
-    if not currency_value:
-        return None
-    
-    # Remove currency symbols and convert to float
-    value_str = str(currency_value)
-    value_str = ''.join(c for c in value_str if c.isdigit() or c == '.' or c == ',')
-    value_str = value_str.replace(',', '')
-    
-    try:
-        return float(value_str)
-    except ValueError:
-        return None
-
 def extract_invoice_data(file_content):
     """
     Process an invoice using Azure Document Intelligence
@@ -142,7 +126,7 @@ def extract_invoice_data(file_content):
         file_content (bytes): The content of the file in binary format
         
     Returns:
-        str: The extracted data in JSON string format
+        list: The extracted data in the format matching Azure Document Intelligence API
     """
     # Load environment variables inside the function to ensure they're always fresh
     load_dotenv(override=True)
@@ -158,373 +142,303 @@ def extract_invoice_data(file_content):
     if not AZURE_DOC_INTELLIGENCE_ENDPOINT:
         raise ValueError("Azure Document Intelligence endpoint not found in environment variables")
         
-    # Ensure endpoint ends with a slash
-    if not AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
-        AZURE_DOC_INTELLIGENCE_ENDPOINT = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}/"
+    # Ensure endpoint doesn't end with a slash
+    if AZURE_DOC_INTELLIGENCE_ENDPOINT.endswith('/'):
+        AZURE_DOC_INTELLIGENCE_ENDPOINT = AZURE_DOC_INTELLIGENCE_ENDPOINT[:-1]
     
     try:
-        # Check if the key and endpoint might be swapped
-        if AZURE_DOC_INTELLIGENCE_KEY and (AZURE_DOC_INTELLIGENCE_KEY.startswith('http://') or AZURE_DOC_INTELLIGENCE_KEY.startswith('https://')):
-            print(f"Warning: Key and endpoint appear to be swapped! Attempting to fix automatically...")
-            
-            # Check if the endpoint looks like a key (not starting with http)
-            if AZURE_DOC_INTELLIGENCE_ENDPOINT and not AZURE_DOC_INTELLIGENCE_ENDPOINT.startswith('http'):
-                print(f"Auto-fixing: Swapping key and endpoint values")
-                # Swap them
-                AZURE_DOC_INTELLIGENCE_KEY, AZURE_DOC_INTELLIGENCE_ENDPOINT = AZURE_DOC_INTELLIGENCE_ENDPOINT, AZURE_DOC_INTELLIGENCE_KEY
-                print(f"After swap - Key length: {len(AZURE_DOC_INTELLIGENCE_KEY)}, Endpoint starts with: {AZURE_DOC_INTELLIGENCE_ENDPOINT[:15]}...")
-            else:
-                print(f"Warning: AZURE_DOC_INTELLIGENCE_KEY appears to be a URL but endpoint also looks like a URL")
-                raise ValueError("Azure Document Intelligence key appears to be a URL instead of an API key")
-            
-        # Check if the endpoint is properly formatted after potential swap
-        if not AZURE_DOC_INTELLIGENCE_ENDPOINT.startswith('https://'):
-            print(f"Warning: AZURE_DOC_INTELLIGENCE_ENDPOINT is not a valid HTTPS URL")
-            raise ValueError("Azure Document Intelligence endpoint must be a valid HTTPS URL")
+        # Create client
+        document_intelligence_client = DocumentIntelligenceClient(
+            endpoint=AZURE_DOC_INTELLIGENCE_ENDPOINT, 
+            credential=AzureKeyCredential(AZURE_DOC_INTELLIGENCE_KEY)
+        )
         
-        # Use REST API directly instead of SDK to avoid dependency issues
-        # Azure Document Intelligence has two possible API endpoints patterns
-        # Try to determine the right one based on the endpoint URL
+        # Log the process
+        print(f"Using Azure Document Intelligence at: {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
+        print(f"Processing document...")
         
-        # The modern endpoint pattern (new resource names)
-        if "document-intelligence" in AZURE_DOC_INTELLIGENCE_ENDPOINT.lower():
-            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
-        # The legacy endpoint pattern (old Form Recognizer resources)
-        elif "formrecognizer" in AZURE_DOC_INTELLIGENCE_ENDPOINT.lower():
-            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}formrecognizer/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
-        # If neither pattern matches, use the modern pattern but log a warning
-        else:
-            print(f"Warning: Could not determine Azure endpoint pattern from {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
-            analyze_url = f"{AZURE_DOC_INTELLIGENCE_ENDPOINT}documentintelligence/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31"
+        # Start analysis process
+        poller = document_intelligence_client.begin_analyze_document(
+            "prebuilt-invoice", 
+            AnalyzeDocumentRequest(bytes_source=file_content)
+        )
         
-        # Log the endpoint for debugging (without the sensitive key)
-        print(f"Using Azure Document Intelligence endpoint: {AZURE_DOC_INTELLIGENCE_ENDPOINT}")
-        print(f"Using analyze URL: {analyze_url}")
+        # Wait for the result
+        invoices = poller.result()
         
-        headers = {
-            "Content-Type": "application/octet-stream",
-            "Ocp-Apim-Subscription-Key": AZURE_DOC_INTELLIGENCE_KEY
-        }
-        
-        # Set up parameters for the invoice analysis
-        params = {
-            "features": "indices,ocrHighResolution",
-            "locale": "en"
-        }
-        
-        # Send the request
-        response = requests.post(analyze_url, headers=headers, params=params, data=file_content)
-        
-        # Handle errors
-        if response.status_code != 202:
-            error_detail = response.text
-            try:
-                error_json = response.json()
-                if 'error' in error_json:
-                    error_detail = error_json['error'].get('message', error_detail)
-            except:
-                pass
-            
-            raise ValueError(f"Azure Document Intelligence request failed with status {response.status_code}: {error_detail}")
-        
-        # Get the operation location for polling
-        operation_location = response.headers.get("Operation-Location")
-        if not operation_location:
-            raise ValueError("No Operation-Location header in response")
-        
-        # Poll the operation status
-        headers = {"Ocp-Apim-Subscription-Key": AZURE_DOC_INTELLIGENCE_KEY}
-        
-        # Simple polling mechanism - in production, use exponential backoff
-        import time
-        max_retries = 10
-        retry_delay = 1  # seconds
-        result = None  # Initialize result to avoid "possibly unbound" error
-        
-        for retry in range(max_retries):
-            result_response = requests.get(operation_location, headers=headers)
-            result = result_response.json()
-            
-            if result.get("status") == "succeeded":
-                # Process successful result
-                break
-            
-            if result.get("status") == "failed":
-                error_detail = "Unknown error"
-                if 'errors' in result and result['errors']:
-                    error_detail = result['errors'][0].get('message', "Unknown error")
-                raise ValueError(f"Azure Document Intelligence analysis failed: {error_detail}")
-            
-            # Wait before polling again
-            time.sleep(retry_delay)
-            
-        # If we've exhausted retries without success or failure status
-        if result is None or result.get("status") != "succeeded":
-            raise ValueError("Azure Document Intelligence analysis timed out")
-        
-        # Extract invoice data from the result
+        # Helper functions for serialization
         def serialize_address(address_value):
-            if not address_value:
-                return ""
-            return ' '.join([str(part) for part in address_value.values() if part])
-        
+            if address_value:
+                return str(address_value)
+            return None
+
         def serialize_currency(currency_value):
-            if not currency_value:
-                return None
-            
-            amount = format_currency(currency_value.get('amount'))
-            return amount
+            if currency_value:
+                return {
+                    "amount": currency_value.amount,
+                    "currency_symbol": currency_value.currency_symbol
+                }
+            return None
         
         # Extract invoice data
-        extracted_data = {
-            "vendorName": "",
-            "vendorAddress": "",
-            "vendorContact": "",
-            "clientName": "",
-            "clientAddress": "",
-            "invoiceNumber": "",
-            "invoiceDate": None,
-            "dueDate": None,
-            "totalAmount": 0,
-            "subtotalAmount": 0,
-            "taxAmount": 0,
-            "currency": "USD",
-            "lineItems": [],
-            "handwrittenNotes": []
-        }
+        extracted_invoices = []
         
-        # Parse the document analysis result
-        if "analyzeResult" in result:
-            document = result["analyzeResult"]["documents"][0]
-            fields = document.get("fields", {})
-            
-            # Basic invoice fields
-            if "VendorName" in fields and fields["VendorName"].get("valueString"):
-                extracted_data["vendorName"] = fields["VendorName"]["valueString"]
-                
-            if "VendorAddress" in fields and fields["VendorAddress"].get("valueString"):
-                extracted_data["vendorAddress"] = fields["VendorAddress"]["valueString"]
-                
-            if "CustomerName" in fields and fields["CustomerName"].get("valueString"):
-                extracted_data["clientName"] = fields["CustomerName"]["valueString"]
-                
-            if "CustomerAddress" in fields and fields["CustomerAddress"].get("valueString"):
-                extracted_data["clientAddress"] = fields["CustomerAddress"]["valueString"]
-                
-            if "InvoiceId" in fields and fields["InvoiceId"].get("valueString"):
-                extracted_data["invoiceNumber"] = fields["InvoiceId"]["valueString"]
-            
-            # Contact information - combine phone and email if available
-            vendor_phone = fields.get("VendorPhoneNumber", {}).get("valueString", "")
-            vendor_email = fields.get("VendorEmail", {}).get("valueString", "")
-            
-            if vendor_phone or vendor_email:
-                contact_parts = []
-                if vendor_phone:
-                    contact_parts.append(vendor_phone)
-                if vendor_email:
-                    contact_parts.append(vendor_email)
-                extracted_data["vendorContact"] = ", ".join(contact_parts)
-            
-            # Date fields
-            if "InvoiceDate" in fields and fields["InvoiceDate"].get("valueDate"):
-                extracted_data["invoiceDate"] = fields["InvoiceDate"]["valueDate"]
-                
-            if "DueDate" in fields and fields["DueDate"].get("valueDate"):
-                extracted_data["dueDate"] = fields["DueDate"]["valueDate"]
-            
-            # Amount fields
-            if "InvoiceTotal" in fields and fields["InvoiceTotal"].get("valueCurrency"):
-                extracted_data["totalAmount"] = serialize_currency(fields["InvoiceTotal"]["valueCurrency"])
-                
-                # Get currency code if available
-                currency_code = fields["InvoiceTotal"]["valueCurrency"].get("currencyCode")
-                if currency_code:
-                    extracted_data["currency"] = currency_code
-                
-            if "SubTotal" in fields and fields["SubTotal"].get("valueCurrency"):
-                extracted_data["subtotalAmount"] = serialize_currency(fields["SubTotal"]["valueCurrency"])
-                
-            if "TotalTax" in fields and fields["TotalTax"].get("valueCurrency"):
-                extracted_data["taxAmount"] = serialize_currency(fields["TotalTax"]["valueCurrency"])
-            
-            # Line items
-            if "Items" in fields and fields["Items"].get("valueArray"):
-                items = fields["Items"]["valueArray"]
-                for item in items:
-                    item_properties = item.get("valueObject", {}).get("properties", {})
-                    
-                    description = item_properties.get("Description", {}).get("valueString", "")
-                    quantity = item_properties.get("Quantity", {}).get("valueNumber", 0)
-                    
-                    # Unit price
-                    unit_price = 0
-                    if "UnitPrice" in item_properties and item_properties["UnitPrice"].get("valueCurrency"):
-                        unit_price = serialize_currency(item_properties["UnitPrice"]["valueCurrency"])
-                    
-                    # Amount
-                    amount = 0
-                    if "Amount" in item_properties and item_properties["Amount"].get("valueCurrency"):
-                        amount = serialize_currency(item_properties["Amount"]["valueCurrency"])
-                    
-                    # Item code
-                    item_code = item_properties.get("ProductCode", {}).get("valueString", "")
-                    
-                    line_item = {
-                        "description": description,
-                        "quantity": quantity,
-                        "unitPrice": unit_price or 0,
-                        "amount": amount or 0,
-                        "itemCode": item_code,
-                        "confidence": 0.9  # Default confidence for Azure
-                    }
-                    
-                    extracted_data["lineItems"].append(line_item)
-        
-        # Add confidence scores
-        extracted_data["confidenceScores"] = {
-            "overall": 0.85,  # Default value
-            "vendorInfo": 0.90 if extracted_data["vendorName"] else 0.5,
-            "invoiceDetails": 0.90 if extracted_data["invoiceNumber"] else 0.5,
-            "lineItems": 0.85 if extracted_data["lineItems"] else 0.5,
-            "totals": 0.90 if extracted_data["totalAmount"] and float(extracted_data["totalAmount"]) > 0 else 0.5,
-            "handwrittenNotes": 0.0  # Azure doesn't explicitly handle handwritten notes
-        }
-        
-        # Create a response in the format matching the example/ms_azure_response.txt
-        # This format matches what Azure Document Intelligence returns
-        standardized_response = [{
-            "vendor_name": {
-                "value": extracted_data.get("vendorName", "")
-            },
-            "vendor_address": {
-                "value": extracted_data.get("vendorAddress", "")
-            },
-            "vendor_address_recipient": {
-                "value": extracted_data.get("vendorContact", "")
-            },
-            "customer_name": {
-                "value": extracted_data.get("clientName", "")
-            },
-            "customer_id": {
-                "value": ""
-            },
-            "customer_address": {
-                "value": extracted_data.get("clientAddress", "")
-            },
-            "customer_address_recipient": {
-                "value": ""
-            },
-            "invoice_id": {
-                "value": extracted_data.get("invoiceNumber", "")
-            },
-            "invoice_date": {
-                "value": extracted_data.get("invoiceDate").isoformat() if isinstance(extracted_data.get("invoiceDate"), datetime) else extracted_data.get("invoiceDate", "")
-            },
-            "invoice_total": {
-                "value": {
-                    "amount": float(extracted_data.get("totalAmount", 0)) if extracted_data.get("totalAmount") else 0,
-                    "currency_symbol": None
-                }
-            },
-            "due_date": None if not extracted_data.get("dueDate") else {
-                "value": extracted_data.get("dueDate").isoformat() if isinstance(extracted_data.get("dueDate"), datetime) else extracted_data.get("dueDate", "")
-            },
-            "purchase_order": {
-                "value": ""
-            },
-            "billing_address": None,
-            "billing_address_recipient": None,
-            "shipping_address": {
-                "value": ""
-            },
-            "shipping_address_recipient": {
-                "value": ""
-            },
-            "items": [],
-            "subtotal": {
-                "value": {
-                    "amount": float(extracted_data.get("subtotalAmount", 0)) if extracted_data.get("subtotalAmount") else 0,
-                    "currency_symbol": None
-                }
-            },
-            "total_tax": {
-                "value": {
-                    "amount": float(extracted_data.get("taxAmount", 0)) if extracted_data.get("taxAmount") else 0,
-                    "currency_symbol": None
-                }
-            },
-            "previous_unpaid_balance": None,
-            "amount_due": None,
-            "service_start_date": None,
-            "service_end_date": None,
-            "service_address": None,
-            "service_address_recipient": None,
-            "remittance_address": None,
-            "remittance_address_recipient": None,
-            
-            # Additional fields for our system
-            "status": "success"
-        }]
-        
-        # Add line items
-        for item in extracted_data.get("lineItems", []):
-            formatted_item = {
-                "description": {
-                    "value": item.get("description", "")
-                },
-                "quantity": {
-                    "value": float(item.get("quantity", 0))
-                },
-                "unit": {
-                    "value": None
-                },
-                "unit_price": {
-                    "value": {
-                        "amount": float(item.get("unitPrice", 0)),
-                        "currency_symbol": None
-                    }
-                },
-                "product_code": {
-                    "value": item.get("itemCode", "")
-                },
-                "amount": {
-                    "value": {
-                        "amount": float(item.get("amount", 0)),
-                        "currency_symbol": None
-                    }
-                }
+        # Process each document
+        for idx, invoice in enumerate(invoices.documents):
+            invoice_data = {
+                "vendor_name": None,
+                "vendor_address": None,
+                "vendor_address_recipient": None,
+                "customer_name": None,
+                "customer_id": None,
+                "customer_address": None,
+                "customer_address_recipient": None,
+                "invoice_id": None,
+                "invoice_date": None,
+                "invoice_total": None,
+                "due_date": None,
+                "purchase_order": None,
+                "billing_address": None,
+                "billing_address_recipient": None,
+                "shipping_address": None,
+                "shipping_address_recipient": None,
+                "items": [],
+                "subtotal": None,
+                "total_tax": None,
+                "previous_unpaid_balance": None,
+                "amount_due": None,
+                "service_start_date": None,
+                "service_end_date": None,
+                "service_address": None,
+                "service_address_recipient": None,
+                "remittance_address": None,
+                "remittance_address_recipient": None,
             }
-            standardized_response[0]["items"].append(formatted_item)
-        
-        # Convert back to the internal format for markdown generation
-        internal_format = {
-            "vendorName": extracted_data.get("vendorName", ""),
-            "vendorAddress": extracted_data.get("vendorAddress", ""),
-            "vendorContact": extracted_data.get("vendorContact", ""),
-            "clientName": extracted_data.get("clientName", ""),
-            "clientAddress": extracted_data.get("clientAddress", ""),
-            "invoiceNumber": extracted_data.get("invoiceNumber", ""),
-            "invoiceDate": extracted_data.get("invoiceDate", ""),
-            "dueDate": extracted_data.get("dueDate", ""),
-            "totalAmount": extracted_data.get("totalAmount", 0),
-            "subtotalAmount": extracted_data.get("subtotalAmount", 0),
-            "taxAmount": extracted_data.get("taxAmount", 0),
-            "currency": extracted_data.get("currency", ""),
-            "lineItems": extracted_data.get("lineItems", []),
-            "handwrittenNotes": extracted_data.get("handwrittenNotes", [])
-        }
-        
-        # Generate markdown output
-        markdown_output = generate_markdown_from_extraction(internal_format)
-        
-        # Add our custom fields needed by the frontend
-        standardized_response[0]["markdownOutput"] = markdown_output
-        standardized_response[0]["auto_navigation"] = True
-        
-        # Return the standardized_response as a dictionary instead of a JSON string
-        # This allows the FastAPI to properly serialize it
-        return standardized_response
+            
+            # Extract vendor details
+            vendor_name = invoice.fields.get("VendorName")
+            if vendor_name:
+                invoice_data["vendor_name"] = {
+                    "value": vendor_name.value_string
+                }
+                
+            vendor_address = invoice.fields.get("VendorAddress")
+            if vendor_address:
+                invoice_data["vendor_address"] = {
+                    "value": serialize_address(vendor_address.value_address)
+                }
+                
+            vendor_address_recipient = invoice.fields.get("VendorAddressRecipient")
+            if vendor_address_recipient:
+                invoice_data["vendor_address_recipient"] = {
+                    "value": vendor_address_recipient.value_string
+                }
+                
+            # Extract customer details
+            customer_name = invoice.fields.get("CustomerName")
+            if customer_name:
+                invoice_data["customer_name"] = {
+                    "value": customer_name.value_string
+                }
+                
+            customer_id = invoice.fields.get("CustomerId")
+            if customer_id:
+                invoice_data["customer_id"] = {
+                    "value": customer_id.value_string
+                }
+                
+            customer_address = invoice.fields.get("CustomerAddress")
+            if customer_address:
+                invoice_data["customer_address"] = {
+                    "value": serialize_address(customer_address.value_address)
+                }
+                
+            customer_address_recipient = invoice.fields.get("CustomerAddressRecipient")
+            if customer_address_recipient:
+                invoice_data["customer_address_recipient"] = {
+                    "value": customer_address_recipient.value_string
+                }
+                
+            # Extract invoice details
+            invoice_id = invoice.fields.get("InvoiceId")
+            if invoice_id:
+                invoice_data["invoice_id"] = {
+                    "value": invoice_id.value_string
+                }
+                
+            invoice_date = invoice.fields.get("InvoiceDate")
+            if invoice_date:
+                invoice_data["invoice_date"] = {
+                    "value": invoice_date.value_date.isoformat() if invoice_date.value_date else None
+                }
+                
+            invoice_total = invoice.fields.get("InvoiceTotal")
+            if invoice_total:
+                invoice_data["invoice_total"] = {
+                    "value": serialize_currency(invoice_total.value_currency)
+                }
+                
+            due_date = invoice.fields.get("DueDate")
+            if due_date:
+                invoice_data["due_date"] = {
+                    "value": due_date.value_date.isoformat() if due_date.value_date else None
+                }
+                
+            purchase_order = invoice.fields.get("PurchaseOrder")
+            if purchase_order:
+                invoice_data["purchase_order"] = {
+                    "value": purchase_order.value_string
+                }
+                
+            # Extract billing and shipping details
+            billing_address = invoice.fields.get("BillingAddress")
+            if billing_address:
+                invoice_data["billing_address"] = {
+                    "value": serialize_address(billing_address.value_address)
+                }
+                
+            billing_address_recipient = invoice.fields.get("BillingAddressRecipient")
+            if billing_address_recipient:
+                invoice_data["billing_address_recipient"] = {
+                    "value": billing_address_recipient.value_string
+                }
+                
+            shipping_address = invoice.fields.get("ShippingAddress")
+            if shipping_address:
+                invoice_data["shipping_address"] = {
+                    "value": serialize_address(shipping_address.value_address)
+                }
+                
+            shipping_address_recipient = invoice.fields.get("ShippingAddressRecipient")
+            if shipping_address_recipient:
+                invoice_data["shipping_address_recipient"] = {
+                    "value": shipping_address_recipient.value_string
+                }
+                
+            # Extract invoice items
+            items = invoice.fields.get("Items")
+            if items:
+                for item in items.value_array:
+                    item_data = {}
+                    
+                    item_description = item.value_object.get("Description")
+                    if item_description:
+                        item_data["description"] = {
+                            "value": item_description.value_string
+                        }
+                        
+                    item_quantity = item.value_object.get("Quantity")
+                    if item_quantity:
+                        item_data["quantity"] = {
+                            "value": item_quantity.value_number
+                        }
+                        
+                    unit = item.value_object.get("Unit")
+                    if unit:
+                        item_data["unit"] = {
+                            "value": unit.value_string
+                        }
+                        
+                    unit_price = item.value_object.get("UnitPrice")
+                    if unit_price:
+                        item_data["unit_price"] = {
+                            "value": serialize_currency(unit_price.value_currency)
+                        }
+                        
+                    product_code = item.value_object.get("ProductCode")
+                    if product_code:
+                        item_data["product_code"] = {
+                            "value": product_code.value_string
+                        }
+                        
+                    item_date = item.value_object.get("Date")
+                    if item_date:
+                        item_data["date"] = {
+                            "value": item_date.value_date.isoformat() if item_date.value_date else None
+                        }
+                        
+                    tax = item.value_object.get("Tax")
+                    if tax:
+                        item_data["tax"] = {
+                            "value": serialize_currency(tax.value_currency) if hasattr(tax, "value_currency") else tax.value_string
+                        }
+                        
+                    amount = item.value_object.get("Amount")
+                    if amount:
+                        item_data["amount"] = {
+                            "value": serialize_currency(amount.value_currency)
+                        }
+                        
+                    invoice_data["items"].append(item_data)
+                    
+            # Extract additional invoice totals
+            subtotal = invoice.fields.get("SubTotal")
+            if subtotal:
+                invoice_data["subtotal"] = {
+                    "value": serialize_currency(subtotal.value_currency)
+                }
+                
+            total_tax = invoice.fields.get("TotalTax")
+            if total_tax:
+                invoice_data["total_tax"] = {
+                    "value": serialize_currency(total_tax.value_currency)
+                }
+                
+            previous_unpaid_balance = invoice.fields.get("PreviousUnpaidBalance")
+            if previous_unpaid_balance:
+                invoice_data["previous_unpaid_balance"] = {
+                    "value": serialize_currency(previous_unpaid_balance.value_currency)
+                }
+                
+            amount_due = invoice.fields.get("AmountDue")
+            if amount_due:
+                invoice_data["amount_due"] = {
+                    "value": serialize_currency(amount_due.value_currency)
+                }
+                
+            # Add custom fields for our system
+            invoice_data["status"] = "success"
+            invoice_data["auto_navigation"] = True
+            
+            # Convert extracted data to our internal format for markdown generation
+            internal_format = {
+                "vendorName": invoice_data.get("vendor_name", {}).get("value", "") if invoice_data.get("vendor_name") else "",
+                "vendorAddress": invoice_data.get("vendor_address", {}).get("value", "") if invoice_data.get("vendor_address") else "",
+                "vendorContact": invoice_data.get("vendor_address_recipient", {}).get("value", "") if invoice_data.get("vendor_address_recipient") else "",
+                "clientName": invoice_data.get("customer_name", {}).get("value", "") if invoice_data.get("customer_name") else "",
+                "clientAddress": invoice_data.get("customer_address", {}).get("value", "") if invoice_data.get("customer_address") else "",
+                "invoiceNumber": invoice_data.get("invoice_id", {}).get("value", "") if invoice_data.get("invoice_id") else "",
+                "invoiceDate": invoice_data.get("invoice_date", {}).get("value", "") if invoice_data.get("invoice_date") else "",
+                "dueDate": invoice_data.get("due_date", {}).get("value", "") if invoice_data.get("due_date") else "",
+                "totalAmount": invoice_data.get("invoice_total", {}).get("value", {}).get("amount", 0) if invoice_data.get("invoice_total") and invoice_data.get("invoice_total").get("value") else 0,
+                "subtotalAmount": invoice_data.get("subtotal", {}).get("value", {}).get("amount", 0) if invoice_data.get("subtotal") and invoice_data.get("subtotal").get("value") else 0,
+                "taxAmount": invoice_data.get("total_tax", {}).get("value", {}).get("amount", 0) if invoice_data.get("total_tax") and invoice_data.get("total_tax").get("value") else 0,
+                "currency": invoice_data.get("invoice_total", {}).get("value", {}).get("currency_symbol", "") if invoice_data.get("invoice_total") and invoice_data.get("invoice_total").get("value") else "",
+                "lineItems": [],
+                "handwrittenNotes": []
+            }
+            
+            # Convert line items to our internal format
+            for item in invoice_data.get("items", []):
+                line_item = {
+                    "description": item.get("description", {}).get("value", "") if item.get("description") else "",
+                    "quantity": item.get("quantity", {}).get("value", 0) if item.get("quantity") else 0,
+                    "unitPrice": item.get("unit_price", {}).get("value", {}).get("amount", 0) if item.get("unit_price") and item.get("unit_price").get("value") else 0,
+                    "amount": item.get("amount", {}).get("value", {}).get("amount", 0) if item.get("amount") and item.get("amount").get("value") else 0,
+                    "itemCode": item.get("product_code", {}).get("value", "") if item.get("product_code") else "",
+                    "confidence": 0.9  # Default confidence score
+                }
+                internal_format["lineItems"].append(line_item)
+                
+            # Generate markdown output
+            markdown_output = generate_markdown_from_extraction(internal_format)
+            
+            # Add markdown output to the invoice data
+            invoice_data["markdownOutput"] = markdown_output
+            
+            extracted_invoices.append(invoice_data)
+            
+        return extracted_invoices
         
     except Exception as e:
         error_message = str(e)
@@ -556,7 +470,7 @@ def extract_invoice_data(file_content):
             "customer_address": {"value": ""},
             "invoice_id": {"value": "Error"},
             "invoice_date": {"value": ""},
-            "invoice_total": {"value": {"amount": 0, "currency_symbol": null}},
+            "invoice_total": {"value": {"amount": 0, "currency_symbol": None}},
             "items": [],
             "status": "error",
             "error": f"Azure Document Intelligence error: {error_message}",
