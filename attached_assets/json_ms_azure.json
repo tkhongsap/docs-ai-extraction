@@ -1,17 +1,17 @@
 {
   "documentInfo": {
-    "vendor": "",
+    "vendor": "Error occurred",
     "vendorAddress": "",
     "vendorContact": "",
     "client": "",
     "clientAddress": "",
-    "invoiceNumber": "",
+    "invoiceNumber": "Error",
     "invoiceDate": null,
     "dueDate": null,
     "totalAmount": 0,
     "subtotalAmount": null,
     "taxAmount": null,
-    "currency": "",
+    "currency": "Unknown",
     "paymentTerms": "",
     "paymentMethod": ""
   },
@@ -21,7 +21,7 @@
   "metadata": {
     "ocrEngine": "ms-document-intelligence",
     "processingTime": 0,
-    "processingTimestamp": "2025-04-18T03:01:38.704988",
+    "processingTimestamp": "2025-04-18T03:14:14.629Z",
     "documentClassification": "invoice"
   },
   "confidenceScores": {
