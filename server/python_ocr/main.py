@@ -356,28 +356,37 @@ async def process_with_azure(file: UploadFile = File(...)):
                 
                 azure_data = extracted_data[0]  # Take the first invoice
                 
-                # Create our standard response format
+                # Create our standard response format using a simplified format for our application
+                # Print all keys at top level for debugging
+                print(f"Azure data keys: {list(azure_data.keys())}")
+                
+                # Create a more direct mapping to how our application expects data
                 standard_response = {
-                    "documentInfo": {
-                        "vendor": azure_data.get("vendor_name", {}).get("value", "") if azure_data.get("vendor_name") else "",
-                        "vendorAddress": azure_data.get("vendor_address", {}).get("value", "") if azure_data.get("vendor_address") else "",
-                        "vendorContact": azure_data.get("vendor_address_recipient", {}).get("value", "") if azure_data.get("vendor_address_recipient") else "",
-                        "client": azure_data.get("customer_name", {}).get("value", "") if azure_data.get("customer_name") else "",
-                        "clientAddress": azure_data.get("customer_address", {}).get("value", "") if azure_data.get("customer_address") else "",
-                        "invoiceNumber": azure_data.get("invoice_id", {}).get("value", "") if azure_data.get("invoice_id") else "",
-                        "invoiceDate": azure_data.get("invoice_date", {}).get("value", "") if azure_data.get("invoice_date") else None,
-                        "dueDate": azure_data.get("due_date", {}).get("value", "") if azure_data.get("due_date") else None,
-                        "totalAmount": azure_data.get("invoice_total", {}).get("value", {}).get("amount", 0) if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else 0,
-                        "subtotalAmount": azure_data.get("subtotal", {}).get("value", {}).get("amount", 0) if azure_data.get("subtotal") and azure_data.get("subtotal").get("value") else None,
-                        "taxAmount": azure_data.get("total_tax", {}).get("value", {}).get("amount", 0) if azure_data.get("total_tax") and azure_data.get("total_tax").get("value") else None,
-                        "currency": azure_data.get("invoice_total", {}).get("value", {}).get("currency_symbol", "") if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else "",
-                        "paymentTerms": "",
-                        "paymentMethod": ""
-                    },
+                    # Direct field mappings that match our application's expected format
+                    "vendorName": azure_data.get("vendor_name", {}).get("value", "") if azure_data.get("vendor_name") else "",
+                    "vendorAddress": azure_data.get("vendor_address", {}).get("value", "") if azure_data.get("vendor_address") else "",
+                    "vendorContact": azure_data.get("vendor_address_recipient", {}).get("value", "") if azure_data.get("vendor_address_recipient") else "",
+                    "clientName": azure_data.get("customer_name", {}).get("value", "") if azure_data.get("customer_name") else "",
+                    "clientAddress": azure_data.get("customer_address", {}).get("value", "") if azure_data.get("customer_address") else "",
+                    "invoiceNumber": azure_data.get("invoice_id", {}).get("value", "") if azure_data.get("invoice_id") else "",
+                    "invoiceDate": azure_data.get("invoice_date", {}).get("value", "") if azure_data.get("invoice_date") else None,
+                    "dueDate": azure_data.get("due_date", {}).get("value", "") if azure_data.get("due_date") else None,
+                    "totalAmount": azure_data.get("invoice_total", {}).get("value", {}).get("amount", 0) if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else 0,
+                    "subtotalAmount": azure_data.get("subtotal", {}).get("value", {}).get("amount", 0) if azure_data.get("subtotal") and azure_data.get("subtotal").get("value") else 0,
+                    "taxAmount": azure_data.get("total_tax", {}).get("value", {}).get("amount", 0) if azure_data.get("total_tax") and azure_data.get("total_tax").get("value") else 0,
+                    "currency": azure_data.get("invoice_total", {}).get("value", {}).get("currency_symbol", "") if azure_data.get("invoice_total") and azure_data.get("invoice_total").get("value") else "",
+                    "paymentTerms": "",
+                    "paymentMethod": "",
+                    
+                    # Default empty arrays for structured data
                     "lineItems": [],
                     "handwrittenNotes": [],
+                    
+                    # Additional info field
                     "additionalInfo": "",
-                    "metadata": {
+                    
+                    # Metadata fields
+                    "processingMetadata": {
                         "ocrEngine": "ms-document-intelligence",
                         "processingTime": 0,
                         "processingTimestamp": datetime.now().isoformat(),

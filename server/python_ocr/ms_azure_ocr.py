@@ -406,6 +406,12 @@ def extract_invoice_data(file_content):
             invoice_data["status"] = "success"
             invoice_data["auto_navigation"] = True
             
+            # Debug: print items structure
+            print(f"Azure invoice items: {invoice_data.get('items', [])}")
+            if len(invoice_data.get('items', [])) > 0:
+                # Print a sample item to see format
+                print(f"Sample item format: {invoice_data['items'][0]}")
+            
             # Convert extracted data to our internal format for markdown generation
             internal_format = {
                 "vendorName": invoice_data.get("vendor_name", {}).get("value", "") if invoice_data.get("vendor_name") else "",
