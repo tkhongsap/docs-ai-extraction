@@ -1,6 +1,6 @@
 # OCR Document Extraction Application
 
-A web application for extracting text and structured data from documents using OCR and handwriting recognition.
+A modern web application for extracting text and structured data from documents using OCR and handwriting recognition technologies.
 
 ## Project Goals
 
@@ -10,64 +10,78 @@ A web application for extracting text and structured data from documents using O
 - Provide review and editing capabilities for extracted information
 - Export processed data in useful formats (Markdown, JSON)
 
+## Tech Stack
+
+- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui components
+- **Backend**: Node.js, Express, TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
+- **OCR Services**: OpenAI Vision API, LlamaIndex
+- **State Management**: React Query
+- **Routing**: Wouter
+- **Form Handling**: React Hook Form with Zod validation
+
 ## Setup Instructions
 
 ### Prerequisites
 
-- Node.js (14.x or higher)
-- MongoDB database (local or Atlas)
-- API keys for OCR services (OpenAI Vision API, LlamaParse, etc.)
+- Node.js (v16 or higher)
+- PostgreSQL database 
+- API keys for OCR services (OpenAI, Mistral)
 
 ### Local Development
 
 1. Clone the repository
-2. Install backend dependencies:
+2. Install dependencies:
    ```
-   cd backend
    npm install
    ```
-3. Install frontend dependencies:
+3. Create `.env` file with the following variables:
    ```
-   cd frontend
-   npm install
-   ```
-4. Create `.env` file in the backend directory with:
-   ```
-   PORT=3001
-   MONGODB_URI=your_mongodb_connection_string
+   DATABASE_URL=your_postgresql_connection_string
    OPENAI_API_KEY=your_openai_api_key
-   LLAMAPARSE_API_KEY=your_llamaparse_api_key
+   MISTRAL_API_KEY=your_mistral_api_key
+   SESSION_SECRET=your_session_secret
    ```
-5. Start the development servers:
+4. Start the development server:
    ```
-   # In backend directory
    npm run dev
-   
-   # In frontend directory (separate terminal)
-   npm start
    ```
 
 ### Replit Deployment
 
 1. Fork the Replit project
-2. Add the following secrets in the Replit Secrets panel:
-   - `MONGODB_URI`
-   - `OPENAI_API_KEY` 
-   - `LLAMAPARSE_API_KEY`
+2. Add the required environment variables in the Replit Secrets panel
 3. Click the Run button to start the application
 
 ## Project Structure
 
-- `/frontend` - React application (UI components, routing, state management)
-- `/backend` - Node.js/Express server (API endpoints, database integration)
-  - `/models` - MongoDB schema definitions
-  - `/routes` - API route handlers
-  - `/services` - OCR integration, document processing
-  - `/middleware` - Authentication, error handling, etc.
+- `/client` - React frontend application
+  - `/src/components` - UI components
+  - `/src/pages` - Page components
+  - `/src/lib` - Utility functions and shared logic
+  - `/src/hooks` - Custom React hooks
+
+- `/server` - Node.js/Express backend
+  - `/routes.ts` - API endpoints
+  - `/services` - OCR integration and document processing
+  - `/python_ocr` - Python OCR processing scripts
+  - `/db.ts` - Database connection and configuration
+
+- `/shared` - Code shared between frontend and backend
+
+## Main Features
+
+- Document upload with drag-and-drop support
+- OCR processing with multiple service options
+- Document management dashboard
+- Side-by-side document review with extracted data
+- Data editing and correction interface
+- Export options for processed data
+- Responsive design for all devices
 
 ## Deployment Notes
 
 - The application is configured to deploy on Replit
-- MongoDB Atlas is recommended for database hosting
-- For larger files, consider configuring cloud storage (S3, Google Cloud Storage)
+- PostgreSQL database connection is required
+- For larger files, configure adequate storage space
 - API rate limits apply to OCR services - implement queuing for production use 
