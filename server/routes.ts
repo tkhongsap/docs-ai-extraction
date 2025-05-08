@@ -7,37 +7,86 @@ import fs from "fs";
 import { insertDocumentSchema, insertExtractionSchema, LineItem, HandwrittenNote } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { v4 as uuidv4 } from 'uuid'; // Added for UUID generation
+import fsPromises from 'fs/promises'; // Added for async file operations
+
 // Import the OCR service
 import ocrService from "./services/ocrService";
 import { DatabaseStorage } from './storage';
 import llamaparseWrapperService from './services/llamaparseWrapperService';
 
 // Setup upload directory
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const uploadDir = path.join(process.cwd(), "uploads"); // Original upload directory
+const ingestDataDirRoot = path.join(process.cwd(), "data"); // Root for /data folder
+const ingestDir = path.join(ingestDataDirRoot, "ingest"); // Specific /data/ingest for new service
 
-// Configure multer for file uploads
-const storage_config = multer.diskStorage({
+// Ensure ingestDir directory exists for the new ingestion service
+(async () => {
+  try {
+    await fsPromises.mkdir(ingestDir, { recursive: true });
+    console.log(`Directory ${ingestDir} created or already exists for ingestion service.`);
+  } catch (error) {
+    console.error(`Error creating directory ${ingestDir}:`, error);
+  }
+})();
+
+// Original multer configuration (renamed to avoid confusion)
+const originalFileStorageConfig = multer.diskStorage({
   destination: (req, file, cb) => {
+    // Ensure the original 'uploads' directory exists if still needed by other parts
+    if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+    }
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Create a unique filename with original name
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    // Original filename logic: Buffer.from(file.originalname, 'latin1').toString('utf8')
     cb(null, Buffer.from(file.originalname, 'latin1').toString('utf8'));
   },
 });
 
-const upload = multer({
-  storage: storage_config,
+// New multer configuration for the Ingestion Service (ING requirements)
+const ingestionFileStorageConfig = multer.diskStorage({
+  destination: async (req: any, file, cb) => {
+    // Generate a completely new UUID for each upload with a timestamp component for uniqueness
+    const timestamp = new Date().getTime();
+    req.document_id_uuid = `${uuidv4()}-${timestamp}`;
+    console.log(`✅ Generated UNIQUE UUID for upload: ${req.document_id_uuid}`);
+    console.log(`📌 Timestamp component: ${timestamp}`);
+    
+    const documentSpecificIngestPath = path.join(ingestDir, req.document_id_uuid);
+    console.log(`📂 Creating directory: ${documentSpecificIngestPath}`);
+    
+    try {
+      await fsPromises.mkdir(documentSpecificIngestPath, { recursive: true });
+      console.log(`✅ Directory created successfully: ${documentSpecificIngestPath}`);
+      cb(null, documentSpecificIngestPath);
+    } catch (error: any) {
+      console.error('❌ Error creating ingestion destination path:', error);
+      cb(error, '');
+    }
+  },
+  filename: (req, file, cb) => {
+    // Preserve the original filename instead of renaming to "original.pdf"
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    
+    // Sanitize filename to ensure it's valid (remove problematic characters)
+    let sanitizedName = originalName.replace(/[/\\?%*:|"<>]/g, '-');
+    
+    console.log(`📄 Original filename: ${originalName}`);
+    console.log(`📄 Saving with sanitized name: ${sanitizedName}`);
+    
+    cb(null, sanitizedName);
+  },
+});
+
+// Original upload middleware instance (if still needed for other routes)
+const originalUpload = multer({
+  storage: originalFileStorageConfig,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 10 * 1024 * 1024, // Original 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    // Accept only specific file types
     const allowedTypes = [
       "application/pdf", 
       "image/jpeg", 
@@ -46,11 +95,32 @@ const upload = multer({
       "image/gif",
       "image/webp"
     ];
-
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type. Only PDF, JPEG, PNG, TIFF, GIF, and WEBP are allowed."));
+      cb(new Error("Invalid file type (original filter). Only PDF, JPEG, PNG, TIFF, GIF, and WEBP are allowed."));
+    }
+  },
+});
+
+// New upload middleware instance for the Ingestion Service (ING requirements)
+const ingestionServiceUpload = multer({
+  storage: ingestionFileStorageConfig,
+  limits: {
+    fileSize: 20 * 1024 * 1024, // ING-F5: 20MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [ // ING-F5: Specified types
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/tiff",
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // Return HTTP 400 as per ING-F5 (error handling in route will set status code)
+      cb(new Error("Invalid file type. Only PDF, JPEG, PNG, and TIFF are allowed for ingestion service."));
     }
   },
 });
@@ -70,7 +140,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Add a simple health check endpoint to help Replit detect the server
   app.get('/health', (req, res) => {
-    res.json({ status: 'ok', message: 'Server is running', time: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      message: 'Server is running',
+      time: new Date().toISOString(),
+      service_name: "docs-ai-extraction-platform",
+      build_metadata: { // ING-F8: build metadata placeholder
+        version: process.env.npm_package_version || "unknown",
+        node_env: process.env.NODE_ENV || "development"
+      }
+    });
   });
 
   // Get all documents
@@ -156,14 +235,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Upload a new document
+  // Upload a new document - THIS IS THE INGESTION SERVICE ENDPOINT
+  // It replaces the previous /api/documents POST logic for new uploads
+  app.post("/api/v1/documents", ingestionServiceUpload.single("file"), async (req: Request, res: Response) => {
+    try {
+      console.log("Received upload request to /api/v1/documents");
+      
+      if (!req.file) {
+        console.log("No file uploaded in request");
+        return res.status(400).json({ message: "No file uploaded." }); // ING-F5 implied
+      }
+
+      const documentIdUUID = (req as any).document_id_uuid; // UUID generated by Multer config
+      const filePath = req.file.path;
+      
+      console.log(`Processing file upload with UUID: ${documentIdUUID}`);
+      console.log(`File saved to: ${filePath}`);
+      console.log(`Original filename: ${req.file.originalname}, Size: ${req.file.size}, Type: ${req.file.mimetype}`);
+
+      // TODO: Database interaction - adapt 'insertDocumentSchema' and 'storage.createDocument'.
+      // This will likely involve adding a UUID field to your 'documents' table and schema.
+      // The 'status' should be 'RECEIVED' (ING-F4).
+      // 'filename' from 'req.file.originalname' should also be persisted (ING-F4).
+
+      const documentToPersist = {
+        uuid: documentIdUUID,
+        originalFilename: Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        status: "RECEIVED", // ING-F4 status
+        storagePath: filePath,
+        // ocrService: (req.body.ocrService as string) || 'default', // If you plan to pass this
+      };
+      console.log("Simulated DB Save for Ingestion Service:", documentToPersist);
+      // Example: const dbRecord = await storage.createIngestionDocument(documentToPersist);
+
+      // ING-F7: Synchronous HTTP call to Classification Service (Mocked for now)
+      const classificationServiceUrl = process.env.CLASSIFICATION_SERVICE_URL || "http://localhost:5001/classify"; // Example URL
+      const classificationPayload = { document_id: documentIdUUID, file_path: filePath };
+      console.log(`Mocking: Calling Classification Service at ${classificationServiceUrl} with payload:`, classificationPayload);
+      
+      // Simulate an async call
+      // const classificationResponse = await fetch(classificationServiceUrl, {
+      //   method: 'POST',
+      //   body: JSON.stringify(classificationPayload),
+      //   headers: { 'Content-Type': 'application/json' }
+      // });
+      // if (!classificationResponse.ok) {
+      //   throw new Error(`Classification Service returned ${classificationResponse.status}`);
+      // }
+      // const classificationResult = await classificationResponse.json();
+      // console.log("Mocked Classification Service Response:", classificationResult);
+
+      // If classification call is successful, update status to FOR_CLASSIFICATION (ING-F7)
+      // For now, we assume success and keep status as RECEIVED as per final response requirement of ING-F4.
+      // The actual status update to FOR_CLASSIFICATION would happen after successful call.
+
+      // ING-F4 response format
+      return res.status(201).json({ document_id: documentIdUUID, status: "RECEIVED" });
+
+    } catch (error: any) {
+      console.error("Error in /api/v1/documents (Ingestion Service):", error);
+      if (error instanceof multer.MulterError) {
+        // Handle Multer specific errors (e.g., file too large)
+        return res.status(400).json({ message: error.message, error_code: "UPLOAD_ERROR" });
+      }
+      if (error.message.includes("Invalid file type")) { // From our custom fileFilter
+        return res.status(400).json({ message: error.message, error_code: "UNSUPPORTED_MEDIA" }); // ING-F5 error response
+      }
+      // Generic error
+      return res.status(500).json({ message: "Failed to ingest document due to an internal error." });
+    }
+  });
+  
+
+  // The OLD app.post("/api/documents", upload.single("file"), ...) IS REPLACED/COMMENTED OUT
+  // OR made distinct if needed for other purposes.
+  // For now, we assume /api/v1/documents is the new primary ingestion.
+  // If the old one is still needed, it should be on a different path or version.
+  
+  /* --- Start of original /api/documents POST endpoint ---
+  // This is the original endpoint. If it's still needed, it should be reconciled
+  // with the new /api/v1/documents or moved to a different path.
+  // For now, I am commenting it out to avoid conflict with /api/v1/documents
+  // if that is meant to be the sole ingestion point as per "01-ingestion-service.md"
+
   app.post("/api/documents", upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
-      // Get OCR service from form data, default to 'llamaparse'
       const ocrServiceName = (req.body.ocrService as string) || 'llamaparse';
 
       const documentData = {
@@ -175,24 +337,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ocrService: ocrServiceName,
       };
 
-      // Validate document data
       const validatedData = insertDocumentSchema.parse(documentData);
-
-      // Create the document
       const document = await storage.createDocument(validatedData);
 
       res.status(201).json(document);
     } catch (error) {
-      console.error("Error uploading document:", error);
+      console.error("Error uploading document (original endpoint):", error);
 
       if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
 
-      res.status(500).json({ message: "Failed to upload document" });
+      res.status(500).json({ message: "Failed to upload document (original endpoint)" });
     }
   });
+  --- End of original /api/documents POST endpoint --- */
+
 
   // Start processing a document
   app.post("/api/documents/:id/process", async (req: Request, res: Response) => {

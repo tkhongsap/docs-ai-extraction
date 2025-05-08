@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Ingestion Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f8f8f8;
+            white-space: pre-wrap;
+        }
+        .note {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+        }
+        iframe {
+            display: none;
+        }
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .error {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .feature {
+            font-weight: bold;
+            color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Ingestion Service</h1>
+    
+    <!-- Form with random parameter to prevent caching -->
+    <form id="upload-form" action="http://localhost:5000/api/v1/documents" method="post" enctype="multipart/form-data" target="response-frame">
+        <div class="form-group">
+            <label for="fileInput">Select PDF File:</label>
+            <input type="file" id="fileInput" name="file" accept=".pdf,.jpg,.jpeg,.png,.tiff" required>
+        </div>
+        
+        <!-- Hidden field for random nonce to ensure unique requests -->
+        <input type="hidden" id="nonce-field" name="nonce" value="">
+        
+        <button type="submit" id="submit-button">Upload File</button>
+    </form>
+    
+    <iframe name="response-frame" id="response-frame"></iframe>
+    
+    <div id="response">Response will appear here after upload...</div>
+    
+    <div class="note">
+        <strong>Note:</strong> After uploading, check the <code>data/ingest/</code> directory for your file.
+        <p><span class="feature">✨ NEW FEATURE:</span> The uploaded file will be saved with its original filename!</p>
+        <p>Each file will be stored in a unique directory with UUID-timestamp format.</p>
+        <p>Command line alternative:</p>
+        <pre>curl -X POST "http://localhost:5000/api/v1/documents" -F "file=@PATH_TO_PDF" -H "Content-Type: multipart/form-data"</pre>
+    </div>
+
+    <script>
+        // Generate a random nonce value on page load
+        document.getElementById('nonce-field').value = Date.now() + '-' + Math.random().toString(36).substring(2);
+        
+        // Re-generate random nonce before each submit to ensure uniqueness
+        document.getElementById('upload-form').addEventListener('submit', function() {
+            document.getElementById('nonce-field').value = Date.now() + '-' + Math.random().toString(36).substring(2);
+            document.getElementById('response').textContent = "Uploading file... please wait";
+            document.getElementById('submit-button').disabled = true;
+            setTimeout(() => {
+                document.getElementById('submit-button').disabled = false;
+            }, 3000);
+        });
+        
+        // Listen for the iframe to load (indicates form submission completed)
+        document.getElementById('response-frame').addEventListener('load', function() {
+            try {
+                // Try to get the response content from the iframe
+                const frameContent = this.contentDocument || this.contentWindow.document;
+                const responseText = frameContent.body.textContent || frameContent.body.innerText;
+                
+                // Check if we have valid JSON
+                try {
+                    const jsonResponse = JSON.parse(responseText);
+                    const filename = document.getElementById('fileInput').files[0]?.name || 'your file';
+                    
+                    document.getElementById('response').innerHTML = 
+                        `<div class="success">
+                            <strong>Success!</strong><br>
+                            Document ID: ${jsonResponse.document_id}<br>
+                            Status: ${jsonResponse.status}<br><br>
+                            Your file "${filename}" has been saved to:<br>
+                            data/ingest/${jsonResponse.document_id}/${filename}
+                        </div>`;
+                } catch (e) {
+                    // Not valid JSON, just display the text
+                    document.getElementById('response').innerHTML = 
+                        `<div class="error">
+                            <strong>Error Response:</strong><br>
+                            ${responseText}
+                        </div>`;
+                }
+            } catch (error) {
+                document.getElementById('response').innerHTML = 
+                    `<div class="error">
+                        <strong>Error retrieving response.</strong><br>
+                        Check the console for details.
+                    </div>`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html> 
