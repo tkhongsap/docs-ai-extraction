@@ -150,8 +150,8 @@ export async function processDocument(filePath: string, service: string = 'opena
     // Log OCR service selection
     console.log(`Processing ${service} service...`);
     
-    // Ensure Python OCR server is running
-    await pythonOcrService.ensurePythonOcrServerRunning();
+    // Temporarily disabled for testing
+    // await pythonOcrService.ensurePythonOcrServerRunning();
     
     // Process document with Python OCR service
     const rawResult = await pythonOcrService.processPythonOcr(filePath, service);

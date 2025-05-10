@@ -1,0 +1,133 @@
+{
+  "total": 14,
+  "success": 9,
+  "failed": 5,
+  "results": [
+    {
+      "name": "Health Check",
+      "method": "GET",
+      "url": "http://localhost:5000/health",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:41:54.877674"
+    },
+    {
+      "name": "Get All Documents",
+      "method": "GET",
+      "url": "http://localhost:5000/api/documents",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:41:57.810692"
+    },
+    {
+      "name": "Get Document by ID",
+      "method": "GET",
+      "url": "http://localhost:5000/api/documents/1",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:41:59.910745"
+    },
+    {
+      "name": "Get Next Document",
+      "method": "GET",
+      "url": "http://localhost:5000/api/documents/next/1",
+      "status": 500,
+      "expected_status": "2xx",
+      "success": false,
+      "timestamp": "2025-05-10T12:42:01.985834"
+    },
+    {
+      "name": "Get Document File",
+      "method": "GET",
+      "url": "http://localhost:5000/api/documents/1/file",
+      "status": 500,
+      "expected_status": "2xx",
+      "success": false,
+      "timestamp": "2025-05-10T12:42:04.067293"
+    },
+    {
+      "name": "Process Document",
+      "method": "POST",
+      "url": "http://localhost:5000/api/documents/1/process",
+      "status": 500,
+      "expected_status": "2xx",
+      "success": false,
+      "timestamp": "2025-05-10T12:42:06.157630"
+    },
+    {
+      "name": "Reprocess Document Section",
+      "method": "POST",
+      "url": "http://localhost:5000/api/documents/1/reprocess/invoice_details",
+      "status": 500,
+      "expected_status": "2xx",
+      "success": false,
+      "timestamp": "2025-05-10T12:42:08.231002"
+    },
+    {
+      "name": "Get All Extractions",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:10.393303"
+    },
+    {
+      "name": "Get Extraction by ID",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions/1",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:12.423556"
+    },
+    {
+      "name": "Get Extraction by Document ID",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions/document/1",
+      "status": 500,
+      "expected_status": "2xx",
+      "success": false,
+      "timestamp": "2025-05-10T12:42:14.487728"
+    },
+    {
+      "name": "Export as CSV",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions/1/csv",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:16.550552"
+    },
+    {
+      "name": "Export as Markdown",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions/1/markdown",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:18.603828"
+    },
+    {
+      "name": "Export as JSON",
+      "method": "GET",
+      "url": "http://localhost:5000/api/extractions/1/json",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:20.674046"
+    },
+    {
+      "name": "Ingestion Status",
+      "method": "GET",
+      "url": "http://localhost:5000/api/v1/status",
+      "status": 200,
+      "expected_status": "2xx",
+      "success": true,
+      "timestamp": "2025-05-10T12:42:22.753426"
+    }
+  ]
+}
