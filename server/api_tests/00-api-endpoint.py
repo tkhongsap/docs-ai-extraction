@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 1️⃣  Set your endpoint (no trailing slash) and an API key
-endpoint   = os.getenv("AZURE_ENDPOINT")
+endpoint   = os.getenv("AZURE_OPENAI_ENDPOINT")
 api_key    = os.getenv("AZURE_OPENAI_API_KEY")  # Match the variable name from your other script
 
 # 2️⃣  Pick the API version you want to target
