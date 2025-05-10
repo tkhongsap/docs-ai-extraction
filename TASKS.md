@@ -14,6 +14,12 @@
 - [x] Add additional documentation and JSDoc comments to router files
 - [x] Create server/utils directory for shared utility functions
 - [x] Separate exporters (CSV, Markdown, JSON) into utility functions
+- [x] Review code for potential refactoring of other shared utility functions
+- [x] Create standardized error handling utility functions
+- [x] Create file operation utility functions 
+- [x] Create validation utility functions
+- [x] Create route helper utility functions
+- [x] Create utils/index.ts to centralize utility exports
 
 ## In Progress Tasks
 - [ ] Review code for potential refactoring of other shared utility functions
@@ -48,3 +54,35 @@ All routes were tested using automated testing. Here are the results:
 3. Missing file path handling in document routes needs to be fixed
 
 These issues appear to be related to the test environment rather than problems with the modular route structure itself. The modular routes are correctly mapped and the application starts up properly. 
+
+## New Utility Functions
+
+The following utility modules have been created to reduce code duplication and standardize operations:
+
+1. **errorHandlers.js**
+   - `handleApiError`: Standardized error handling for all route handlers
+   - `asyncHandler`: Wraps async route handlers with try/catch
+   - `notFoundResponse`: Standard 404 responses
+   - `validationErrorResponse`: Standard validation error responses
+
+2. **fileUtils.js**
+   - `ensureDirectoryExists`: Creates directories recursively
+   - `safeDeleteFile`: Safely delete a file if it exists
+   - `getUploadDir`: Gets the configured upload directory
+   - `isValidPDF`: Checks if a file is a valid PDF
+   - `sanitizeFilename`: Sanitizes filenames for storage
+   - `getMimeTypeFromFilename`: Gets MIME type from file extension
+
+3. **validationUtils.js**
+   - `validate`: Generic function to validate with Zod schemas
+   - `validatePositiveInteger`: Validates and parses positive integers
+   - `validateEnum`: Validates that a value is in an allowed set
+   - `isAllowedFileType`: Validates file MIME types
+   - `commonSchemas`: Common Zod schemas for reuse
+
+4. **routeHelpers.js**
+   - `getPaginationMetadata`: Generates pagination metadata
+   - `paginatedResponse`: Creates standardized paginated responses
+   - `getPaginationParams`: Extracts pagination params from requests
+   - `setExportHeaders`: Sets headers for file downloads
+   - `methodNotAllowed`: Standard 405 Method Not Allowed handler 
