@@ -11,16 +11,12 @@
 - [x] Update server/index.ts to use the modular routes
 - [x] Verify all routes are working correctly with updated imports and paths
 - [x] Delete the original routes.ts file once we confirm everything works
+- [x] Add additional documentation and JSDoc comments to router files
+- [x] Create server/utils directory for shared utility functions
+- [x] Separate exporters (CSV, Markdown, JSON) into utility functions
 
 ## In Progress Tasks
-- [ ] Add additional documentation and JSDoc comments to router files
-- [ ] Review code for potential refactoring of shared utility functions
-- [ ] Consider separating exporters (CSV, Markdown, JSON) into utility functions 
-
-## Upcoming Tasks
-- [ ] Add additional documentation and JSDoc comments to router files
-- [ ] Review code for potential refactoring of shared utility functions
-- [ ] Consider separating exporters (CSV, Markdown, JSON) into utility functions 
+- [ ] Review code for potential refactoring of other shared utility functions
 
 ## Route Verification Results
 

@@ -1,3 +1,9 @@
+/**
+ * Documents Routes
+ * 
+ * This module handles all routes related to document management,
+ * including listing, retrieving, and deleting documents.
+ */
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import multer from "multer";
@@ -73,7 +79,13 @@ const mockDocuments = [
   }
 ];
 
-// Get all documents
+/**
+ * Get all documents
+ * 
+ * @route GET /api/documents
+ * @returns {Object[]} 200 - Array of document objects
+ * @returns {Object} 500 - Error message
+ */
 router.get("/", async (req: Request, res: Response) => {
   try {
     const documents = await storage.getDocuments();
@@ -89,7 +101,15 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-// Get a single document
+/**
+ * Get a single document by ID
+ * 
+ * @route GET /api/documents/:id
+ * @param {number} id.path.required - Document ID
+ * @returns {Object} 200 - Document object
+ * @returns {Object} 404 - Not found message
+ * @returns {Object} 500 - Error message
+ */
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -116,7 +136,15 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// Get document file
+/**
+ * Get document file
+ * 
+ * @route GET /api/documents/:id/file
+ * @param {number} id.path.required - Document ID
+ * @returns {File} 200 - The document file
+ * @returns {Object} 404 - Not found message 
+ * @returns {Object} 500 - Error message
+ */
 router.get("/:id/file", async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -139,7 +167,15 @@ router.get("/:id/file", async (req: Request, res: Response) => {
   }
 });
 
-// Get next document for review
+/**
+ * Get next document for review
+ * 
+ * @route GET /api/documents/next/:currentId
+ * @param {number} currentId.path.required - Current document ID
+ * @returns {Object} 200 - Next document object
+ * @returns {Object} 404 - No more documents message
+ * @returns {Object} 500 - Error message
+ */
 router.get("/next/:currentId", async (req: Request, res: Response) => {
   try {
     const currentId = parseInt(req.params.currentId);
