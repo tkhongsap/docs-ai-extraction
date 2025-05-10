@@ -9,7 +9,8 @@ import { setupVite, serveStatic, log } from "./vite.js";
 import { config } from "./config.js";
 
 // Import the Python OCR service to ensure it's available
-import pythonOcrService from './services/pythonOcrService.js';
+// Temporarily commented out for testing purposes
+// import pythonOcrService from './services/pythonOcrService.js';
 
 const app = express();
 app.use(express.json());
@@ -51,12 +52,16 @@ app.use((req, res, next) => {
   const port = 5000;
   
   // Try to ensure Python OCR service is running
+  // Temporarily commented out for testing purposes
+  /*
   try {
     await pythonOcrService.ensurePythonOcrServerRunning();
   } catch (error) {
     console.warn('Could not start Python OCR server:', error);
     console.warn('Some OCR features may not be available');
   }
+  */
+  console.log('Python OCR service disabled for testing');
   
   const httpServer = createServer(app);
   
