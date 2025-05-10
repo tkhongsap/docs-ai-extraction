@@ -3,9 +3,13 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { config } from "./config";
+import { createServer } from "http";
+import { initializeRoutes } from "./routes/index.js";
+import { setupVite, serveStatic, log } from "./vite.js";
+import { config } from "./config.js";
+
+// Import the Python OCR service to ensure it's available
+import pythonOcrService from './services/pythonOcrService.js';
 
 const app = express();
 app.use(express.json());
@@ -45,9 +49,21 @@ app.use((req, res, next) => {
   // Use port 5000 for Replit workflow compatibility
   // Start listening immediately so Replit can detect the port
   const port = 5000;
-  const server = await registerRoutes(app);
   
-  server.listen({
+  // Try to ensure Python OCR service is running
+  try {
+    await pythonOcrService.ensurePythonOcrServerRunning();
+  } catch (error) {
+    console.warn('Could not start Python OCR server:', error);
+    console.warn('Some OCR features may not be available');
+  }
+  
+  const httpServer = createServer(app);
+  
+  // Initialize all application routes
+  initializeRoutes(app);
+  
+  httpServer.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
@@ -69,7 +85,7 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
-    await setupVite(app, server);
+    await setupVite(app, httpServer);
   } else {
     serveStatic(app);
   }
