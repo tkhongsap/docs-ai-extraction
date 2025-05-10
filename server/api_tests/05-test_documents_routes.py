@@ -10,10 +10,10 @@ init()
 BASE_URL = "http://localhost:5000"
 
 def log_success(message):
-    print(f"{Fore.GREEN}✓ {message}{Style.RESET_ALL}")
+    print(f"{Fore.GREEN}[OK] {message}{Style.RESET_ALL}")
 
 def log_error(message):
-    print(f"{Fore.RED}✗ {message}{Style.RESET_ALL}")
+    print(f"{Fore.RED}[ERROR] {message}{Style.RESET_ALL}")
 
 def log_info(message):
     print(f"{Fore.BLUE}ℹ {message}{Style.RESET_ALL}")
