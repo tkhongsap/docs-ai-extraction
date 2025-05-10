@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-05-10T12:43:31.897799",
+  "timestamp": "2025-05-10T13:07:32.565521",
   "total_tests": 5,
   "passed": 0,
   "failed": 5,
@@ -8,36 +8,36 @@
       "file": "03-test_all_endpoints.py",
       "success": false,
       "exit_code": 1,
-      "stdout_length": 116,
-      "stderr_length": 1624
+      "stdout_length": 7292,
+      "stderr_length": 1487
     },
     {
       "file": "04-test_health_routes.py",
       "success": false,
       "exit_code": 1,
-      "stdout_length": 63,
-      "stderr_length": 1484
+      "stdout_length": 424,
+      "stderr_length": 0
     },
     {
       "file": "05-test_documents_routes.py",
       "success": false,
       "exit_code": 1,
-      "stdout_length": 75,
-      "stderr_length": 1716
+      "stdout_length": 1454,
+      "stderr_length": 0
     },
     {
       "file": "07-test_extractions_routes.py",
       "success": false,
       "exit_code": 1,
-      "stdout_length": 79,
-      "stderr_length": 1720
+      "stdout_length": 2846,
+      "stderr_length": 0
     },
     {
       "file": "08-test_ingestion_routes.py",
       "success": false,
       "exit_code": 1,
-      "stdout_length": 74,
-      "stderr_length": 1706
+      "stdout_length": 982,
+      "stderr_length": 0
     }
   ]
 }
